@@ -63,13 +63,13 @@ void loop()
   speedSetter.correct();  // Adjusts speed if the controller is active
   lineFollower.correct(); // Follows magnetic strip if the controller is active
 
-  // EchoMonitor::update();  // Checks ping distance if the time is right
+  EchoMonitor::update();  // Checks ping distance if the time is right
 
   // These checks are free as they actually do not access sensors.
-  //if (check_obstacles() < OBSTACLE_STOP) {
-  //  status.saveState = status.state;
-  //  status.state = OBSTACLE_STOPPED;
-  //}
+  if (check_obstacles() < OBSTACLE_STOP) {
+    status.saveState = status.state;
+    status.state = OBSTACLE_STOPPED;
+  }
 
   // process_rfid will change the status to ENTER_JUNCTION or LEAVE_JUNCTION
   // It can also just stop the car

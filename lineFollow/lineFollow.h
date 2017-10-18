@@ -15,9 +15,9 @@
 #define SPEED_PIN            6 // Needs to be a PWM pin to be able to control motor speed
 #define STEER_PIN            10
 #define SPEED_SENSOR_INTR    2 // Interupt raised by slotted speed sensor - tacho + speed.
-#define TRIGGER_PIN_LEFT     A4  // Arduino pin tied to trigger pin on ping sensor.
+#define TRIGGER_PIN_LEFT     A2  // Arduino pin tied to trigger pin on ping sensor.
 #define ECHO_PIN_LEFT        3  // Arduino pin tied to echo pin on ping sensor.
-#define TRIGGER_PIN_RIGHT    A5  // Arduino pin tied to trigger pin on ping sensor.
+#define TRIGGER_PIN_RIGHT    A3  // Arduino pin tied to trigger pin on ping sensor.
 #define ECHO_PIN_RIGHT       9  // Arduino pin tied to echo pin on ping sensor.
 
 // Useful Physical Constants
