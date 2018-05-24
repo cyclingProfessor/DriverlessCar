@@ -1,5 +1,5 @@
 #include <Wire.h>
-#define BAUD_RATE 19200
+#define BAUD_RATE 115200
 #define CHAR_BUF 128
 #define GET_VALUE 0
 #define CALIBRATE 1
@@ -27,7 +27,7 @@ void loop() {
         break;
       case '1':
         digitalWrite(A1, LOW);
-        mode = GET_VALUE;
+        mode = CALIBRATE;
         Serial.println("Mode set to calibrate - look for Blue flashing changing  to Blue when it finds the line.");
         break;
       case 'h':
@@ -43,11 +43,11 @@ void loop() {
     Serial.println("Asking for data");
     Serial.println(Wire.requestFrom(0x12, 9));
     Serial.println("Got some data");
-    delay(1); // Give some setup time...
     while(Wire.available()) {
         buff[temp++] = Wire.read();
     }
     Serial.println(buff);
   }
-  delay(30); // Don't loop to quickly.
+  delay(100); // Don't loop to quickly.
+  Serial.println(millis());
 }
