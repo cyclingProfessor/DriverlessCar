@@ -1,7 +1,7 @@
 #include "lineFollow.h"
 
 /////////////// Configuration values ////////////////////////////////////////////////
-// Time in milliseconds between control loops
+// Minimum Time in milliseconds between control loops
 #define DELTA_TIME 30
 
 ////////////// GLOBAL STATE ///////////////////////////////////////////////////////
@@ -15,8 +15,10 @@ Motor   motor(DIR_PIN1, DIR_PIN2, SPEED_PIN);   // The h-Bridge motor
 Steerer turner;                                 // The steering servo
 MagSensor magSensor;                            // The magnetic sensor
 SpeedSensor speedSensor;                        // The derived device for calculating speed
+CameraSensor camera(CAMERA_PIN);                // The OpenMV camera
+
 Controller speedSetter(speedSensor, motor, MIN_MOTOR_POWER, DELTA_TIME, 0.1f, 1.0f);
-Controller lineFollower(magSensor, turner, NEUTRAL_ANGLE, 19, 0.8f, 0.1f);
+Controller lineFollower(camera, turner, NEUTRAL_ANGLE, DELTA_TIME, -0.6f, 1000.0f);
 
 Status status; // global status
 
@@ -25,6 +27,8 @@ void setup()
   Serial.begin(115200);
 
   while (!Serial);    // Do nothing if no serial port is opened
+  Wire.begin(); // Begins commns to I2C devices.
+
   speedSensor.start();
   turner.start();
   rfid.start();
@@ -55,8 +59,10 @@ static long timerStart;
 
 #define OBSTACLE_STOP 20  // see something at this distance and stop
 #define OBSTACLE_START 30 // wait until its this far away to start
-#define RIGHT_SIDE (0.8f) // Kp to make the line following keep to the right
-#define LEFT_SIDE (-0.8f) // Kp to make the line following keep to the left
+
+boolean stopped() {
+  return status.state == OBSTACLE_STOPPED || status.state == USER_STOPPED;
+}
 
 void loop()
 {
@@ -66,7 +72,7 @@ void loop()
   EchoMonitor::update();  // Checks ping distance if the time is right
 
   // These checks are free as they actually do not access sensors.
-  if (check_obstacles() < OBSTACLE_STOP) {
+  if (check_obstacles() < OBSTACLE_STOP && !stopped) {
     status.saveState = status.state;
     status.state = OBSTACLE_STOPPED;
   }
@@ -91,6 +97,7 @@ void loop()
   // Do an action based on the state
   switch (status.state) {
     case FOLLOWING:
+      camera.watch();
       follow(status.currentSpeed); // Make both controllers active, with a desired value for magnetism and speed.
       break;
     case OBSTACLE_STOPPED:

@@ -19,6 +19,7 @@
 #define ECHO_PIN_LEFT        3  // Arduino pin tied to echo pin on ping sensor.
 #define TRIGGER_PIN_RIGHT    A3  // Arduino pin tied to trigger pin on ping sensor.
 #define ECHO_PIN_RIGHT       9  // Arduino pin tied to echo pin on ping sensor.
+#define CAMERA_PIN           A1 // Arduino pin tied to control pin on OpenMV camera
 
 // Useful Physical Constants
 #define MAX_SERVO 1798
@@ -151,6 +152,19 @@ class MagSensor : public Sensor {
 };
 
 //////////////////////////////////////////////////////////////////////////////////////
+class CameraSensor : public Sensor {
+  private:
+    const int controlPin;
+    bool watching;
+  public:
+    CameraSensor(int);
+    void watch();
+    void calibrate();
+    unsigned getNormalisedValue();
+    bool isWatching();
+};
+
+//////////////////////////////////////////////////////////////////////////////////////
 class RFID {
   private:
     static const int BLOCKS = 16;
@@ -199,6 +213,7 @@ extern int echo_distances[2];
 extern MFRC522 mfrc522;
 extern RFID rfid;
 extern MagSensor magSensor;                            // The magnetic sensor
+extern CameraSensor camera;                            // OpenMV camera
 extern SpeedSensor speedSensor;                        // The derived device for calculating speed
 extern Motor   motor                               ;   // The h-Bridge motor
 extern Steerer turner;

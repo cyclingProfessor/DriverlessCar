@@ -76,7 +76,7 @@ void stop() {
 void follow(int speed) {
   speedSetter.setDesiredValue(speed);
   speedSetter.setActive(true);
-  lineFollower.setDesiredValue(30);  // A guess
+  lineFollower.setDesiredValue(50);  // Not a guess
   lineFollower.setActive(true);
 }
 

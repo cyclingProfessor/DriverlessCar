@@ -57,8 +57,43 @@ unsigned SpeedSensor::getNormalisedValue() {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
+CameraSensor::CameraSensor(int pin): controlPin(pin) {
+    watching = false;
+    pinMode(controlPin, OUTPUT);
+    CameraSensor::calibrate();
+}
+
+void CameraSensor::watch() {
+    digitalWrite(controlPin, HIGH);
+    watching = true;
+}
+void CameraSensor::calibrate() {
+  digitalWrite(controlPin, LOW);
+  watching = false;
+}
+
+bool CameraSensor::isWatching() {
+	return watching;
+}
+
+// This must not be called unless the camera is started
+unsigned CameraSensor::getNormalisedValue() {
+	if (!watching) {
+		return 0; // This should never happen
+	}
+	int32_t temp = 0;
+    char buff[10] = {0};
+
+    Wire.requestFrom(0x12, 9);
+    while(Wire.available()) {
+        buff[temp++] = Wire.read();
+    }
+    buff[temp] = '\0';
+    return atoi(buff + 5);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////
 void MagSensor::start() {
-  Wire.begin();
   while (!mag.init());
   mag.enableDefault();
   mag.writeReg(LIS3MDL::CTRL_REG2, 0x60);

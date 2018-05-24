@@ -45,7 +45,7 @@ void Controller::correct()
   // In this case differential is -10 so can just add a multipl eof this to the level.
 
   int level = neutralLevel + (delta / Kp); + (differential / Kd);
-  //if (&sensor == &magSensor)
+  //if (&sensor == &camera)
   //  Serial.println("Desired = " + String(desired) + " Actual = " + String(value) + " Delta = " + String(delta) + " Kp = " + String(Kp) + " Level = " + String(level));
   transducer.setLevel(level);
 }
