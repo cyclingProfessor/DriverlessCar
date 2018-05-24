@@ -23,8 +23,8 @@ import pyb, ustruct
 from pyb import Pin, Timer, LED
 
 CALIBRATE_FLASH = 40 # flash speed while calibrating
-REPORT_TIME = 200 # time between sending direction updates
-LAMBDA = 0.8 # rolling average constant: nval = lambda * oval + (1-lambda) * nval
+REPORT_TIME = 0 # time between sending direction updates
+LAMBDA = 0.0 # rolling average constant: nval = lambda * oval + (1-lambda) * nval
 
 sensor.reset()
 sensor.set_pixformat(sensor.RGB565)
@@ -43,7 +43,8 @@ bus = pyb.I2C(2, pyb.I2C.SLAVE, addr=0x12)
 activePin = Pin('P6', Pin.IN, Pin.PULL_DOWN)
 
 # Color Tracking Thresholds (L Min, L Max, A Min, A Max, B Min, B Max)
-thresholds = [(0, 100, -57, -17, -35, 3)] # generic_green band insulation tape - many light conditions
+# thresholds = [(0, 100, -57, -17, -35, 3)] # generic_green band insulation tape - many light conditions
+thresholds = [(0, 100, -56, -19, -42, -3)] # Either blue or green tape.
 
 def leds(on_arr):
     for led in range(1,4):
@@ -70,7 +71,6 @@ def calibrate(): # if not calibrated then swithces leds on for one call, off for
 current_position = -1 # I am LOST
 def sendData():
     global current_position
-    leds((False, False, False)) # Turn off leds in order to snapshot
     img = sensor.snapshot()
     show(current_position) # turns on leds
 
@@ -82,7 +82,6 @@ def sendData():
         current_position = int(save_position * LAMBDA + blob.cx() * 100 / WIDTH * (1 - LAMBDA))
     show(current_position) # turns on leds
 
-    #pyb.disable_irq()
     text = "XPOS:{:04d}".format(current_position)
     data = ustruct.pack("<%ds" % len(text), text)
     print(text)
@@ -90,7 +89,6 @@ def sendData():
         bus.send(data, timeout=500) # Send the data second.
     except OSError as err:
         pass
-    #pyb.enable_irq()
 
 
 #############################################################################################
@@ -100,7 +98,6 @@ while(True):
     # Here we either calibrate each time around the loop, or we do direction processing.
     while activePin.value():
         sendData()
-        time.sleep(REPORT_TIME)
 
     while not activePin.value():
         calibrate(); # flash light until calibrated.
