@@ -1,29 +1,14 @@
 #include "lineFollow.h"
 
+#define MAG_STOP 40
+
 int check_obstacles() {
   return min(echo_distances[0], echo_distances[1]);
 }
 
-#define TAG_RIGHT_TURN 1
-#define TAG_LEFT_TURN 2
-#define TAG_STRAIGHT_ON 4
-
-Junction::Junction(char *n, byte b) : name(n), properties(b) {}
-bool Junction::hasRight() {
-  return properties | TAG_RIGHT_TURN;
+bool magnetic_strip() {
+  return magSensor.getNormalisedValue() > MAG_STOP;
 }
-bool Junction::hasLeft() {
-  return properties | TAG_LEFT_TURN;
-}
-bool Junction::hasStraight() {
-  return properties | TAG_STRAIGHT_ON;
-}
-
-// Junction tags have string "J:name"
-Junction tags[] {
-  Junction("A1", TAG_RIGHT_TURN),
-  Junction("A2", TAG_LEFT_TURN)
-};
 
 //////////////////////////////////////////////////////////
 // We could be at a junction RFID or some other tag
@@ -32,31 +17,17 @@ byte process_rfid(Status *status) {
   if (!str) {
     return;
   }
-  strncpy(status->lastTag, str, 16);
-  if (!strncmp(str, "J:", 2)) { // We are at a junction tag
-    char *junction = str + 2; // Now the junction could be a surprise!
-    if (status->junction) { // we are already on a junction - so must be leaving it
-      status->state = FOLLOWING;
-      status->junction = NULL;
-    } else {
-      status->state = ENTER_JUNCTION;
-      status->junction = tags + 1;
-    }
-  }
   if (!strncmp(str, "Dave", 4)) {
     status->saveState = status->state;
     status->state = USER_STOPPED;
   }
   if (!strncmp(str, "++++",4)) {
-    status->currentSpeed = min(status->currentSpeed + 10, 40);
-    speedSetter.setDesiredValue(status->currentSpeed);
+    status->desiredSpeed = min(status->desiredSpeed + 10, 40);
   }
   if (!strncmp(str, "----",4)) {
-    status->currentSpeed = max(status->currentSpeed - 10, 20);
-    speedSetter.setDesiredValue(status->currentSpeed);
+    status->desiredSpeed = max(status->desiredSpeed - 10, 20);
   }
   if (!strncmp(str, "Stop!", 5)) {
-    status->userCode[0] = '@';
     status->saveState = status->state;
     status->state = USER_STOPPED;    
   }
@@ -66,91 +37,47 @@ byte process_rfid(Status *status) {
   }
 }
 
-void stop() {
-  motor.off();
-  speedSetter.setActive(false);
-  turner.neutral();
-  lineFollower.setActive(false);
-}
-
-void follow(int speed) {
-  speedSetter.setDesiredValue(speed);
-  speedSetter.setActive(true);
-  lineFollower.setDesiredValue(50);  // Not a guess
-  lineFollower.setActive(true);
-}
-
-static long turnTime = 0;
-void turn(int speed, int end, unsigned fullTurn, unsigned relaxedTurn) {
-  // Too busy - slow things down
-  if (millis() < turnTime + 50) {
-    return;
-  }
-  turnTime = millis();
-  int currentTurn;
-  if ((tacho >= end) && (magSensor.getNormalisedValue() < 20)) { // we are to the right of the curve, relax a bit
-    currentTurn = relaxedTurn;
-  } else {
-    currentTurn = fullTurn;
-  }
-  lineFollower.setActive(false);
-
-  //Speed up a bit because it is hard to turn!
-  speedSetter.setDesiredValue(speed);
-  turner.steer(currentTurn);
-}
-
 static long reportTime = 0;
 
-void report(Status &status) {
+void report(Status &status, unsigned paramCount, char **paramNames, unsigned **paramValues) {
   if (millis() < reportTime + 1000) {
     return;
   }
   reportTime = millis();
   Serial.print("R" + String(status.lastTag) + ":END:");
-  Serial.print("D" + String(echo_distances[0]) + " Right:" + String(echo_distances[1]) + ":END:");
+  Serial.print("Dleft:" + String(echo_distances[0]) + " right:" + String(echo_distances[1]) + ":END:");
   Serial.print("M" + String(magSensor.getNormalisedValue()) + ":END:");
-  Serial.print("T" + String(tacho) + ":END:");
-  Serial.print("S" + String(speedSensor.getNormalisedValue()) + ":END:");
-  Serial.print("P" + String(status.state) + " " + String(status.turnParams.speedStep1) +" " + String(status.turnParams.angleStep1) +" " + String(status.turnParams.speedStep2) +" " + String(status.turnParams.angleStep2) +" " + String(status.currentSpeed) + ":END:");
-}
-#define TURN_START 30     // How long to turn full at the start of a turn
-
-void enter_junction(Status &status, int &end, unsigned &fullTurn, unsigned &relaxedTurn) {
-  Junction *j = status.junction;
-
-  if (status.onRight) {
-    if (j->hasRight()) {
-      fullTurn = MAX_ANGLE;
-      relaxedTurn = MAX_ANGLE - 5;
-      status.state = TURNING;
-      end = tacho + TURN_START;
-    } else if (j->hasStraight()) {
-      status.state = FOLLOWING;
-    } else {
-      // Damn - we are on the right and have to turn left! Wing it.
-      fullTurn = MIN_ANGLE;
-      relaxedTurn = MIN_ANGLE + 5;
-      status.state = TURNING;
-      end = tacho + 2 * TURN_START;
-    }
-  } else {
-    Serial.println("I am following the left");
-    if (j->hasLeft()) {
-      Serial.println("I can turn left");
-      fullTurn = MIN_ANGLE;
-      relaxedTurn = MIN_ANGLE + 5;
-      status.state = TURNING;
-      end = tacho + TURN_START;
-    } else if (j->hasStraight()) {
-      status.state = FOLLOWING;
-      Serial.println("I can't turn left, but can go straight");
-    } else {
-      // Damn - we are on the left and have to turn right! Wing it.
-      fullTurn = MAX_ANGLE;
-      relaxedTurn = MAX_ANGLE - 5;
-      status.state = TURNING;
-      end = tacho + 2 * TURN_START;
-    }
+  Serial.print("Z" + String(status.state) + ":END:");
+  
+  Serial.print("P");
+  for (int index = 0 ; index < paramCount ; index++) {
+    Serial.print(paramNames[index] + String(*(paramValues[index])));
   }
+  Serial.print(":END:");
+}
+
+// Do all of the communication with the Pro Mini
+void ProMini::stop() {
+  // set up data lines to zero.
+  // if we have just stopped then switch control line on then off again.
+}
+void ProMini::setFollowing() {
+  // set control lines to desired speed if its new
+  // set PID parameters if they are new
+  // If new parameters then send the right commands
+}
+void ProMini::sendTurn(int which) {
+  // Always set the data and start a turn
+}
+bool ProMini::moveEnded() {
+  return digitalRead(MOVING_PIN) == LOW;
+}
+
+ProMini::ProMini(int clock, int isMoving): clockPin(clock), isMovingPin(isMoving){
+  pinMode(clock, OUTPUT);
+  pinMode(isMoving, INPUT);
+  pinMode(A0, OUTPUT);
+  pinMode(A1, OUTPUT);
+  pinMode(A2, OUTPUT);
+  pinMode(A3, OUTPUT);
 }

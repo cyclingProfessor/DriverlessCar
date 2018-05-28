@@ -1,61 +1,6 @@
 #include "lineFollow.h"
 #include <NewPing.h>
 
-///////////////////////////////////////////////////////////////////////////////////////////////
-// Interupt for speed sensor
-/////////// Circular buffer of previous tacho clicks ////////////////////////
-volatile unsigned long usecTimes[TIME_AVERAGE];
-volatile byte currentSpeedTime = TIME_AVERAGE_MASK; // Will start at position zero in the circular buffer
-
-void addToTacho() {
-  long t = millis();
-  if (t == usecTimes[currentSpeedTime]) {// TOO FAST => Bounce
-    return;
-  }
-  currentSpeedTime = (currentSpeedTime + 1) & TIME_AVERAGE_MASK; // increment index
-  tacho += 1;
-  usecTimes[currentSpeedTime] = t; // Put time into place
-}
-
-///////////////////////////////////////////////////////////////////////////////////////
-void SpeedSensor::start() {
-  // Make the speed/distance sensor active
-  unsigned long nowTime = millis();
-  unsigned startTime = nowTime - (TIME_AVERAGE * 10000U); 
-  for (int i = 0 ; i < TIME_AVERAGE ; i++ ) {
-    usecTimes[i] = startTime + 10000U * i;  // Now we set initial speed to zero.
-  }
-  attachInterrupt(digitalPinToInterrupt(SPEED_SENSOR_INTR), addToTacho, RISING);
-  moving =true;
-}
-void SpeedSensor::stop() {
-  detachInterrupt(digitalPinToInterrupt(SPEED_SENSOR_INTR));
-  moving = false;
-}
-void SpeedSensor::restart() {
-  this->stop();
-  this->start();
-}
-
-unsigned SpeedSensor::getNormalisedValue() {
-  if (!moving) {
-    return 0;
-  }
-  // There are twenty clicks per revolution = 10cm
-  // Hence this should be of the order of 1sec - so approx 1 thousand
-  // Travelling 1m per sec is speed 100.  10cm per sec is speed 10.
-
-  // Copy index so that it is coherent throughout calculation
-  byte index = currentSpeedTime;
-  //DEBUG
-  //Serial.print(index) ; Serial.print(", ");
-  //for (int i = 0 ; i < TIME_AVERAGE ; i++ ) {
-  //  Serial.print(usecTimes[i]) ; Serial.print(", ");
-  //}
-
-  return 2500u / (millis() - usecTimes[(index + 2) & TIME_AVERAGE_MASK]);
-}
-
 //////////////////////////////////////////////////////////////////////////////////////
 CameraSensor::CameraSensor(int pin): controlPin(pin) {
     watching = false;
@@ -89,7 +34,8 @@ unsigned CameraSensor::getNormalisedValue() {
         buff[temp++] = Wire.read();
     }
     buff[temp] = '\0';
-    return atoi(buff + 5);
+    int retval = atoi(buff + 5);
+    return retval != -1 ? retval : 50 ;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -100,11 +46,11 @@ void MagSensor::start() {
 }
 
 unsigned MagSensor::getNormalisedValue() {
-  mag.read();
-  //double L2Answer = sqrt((double)((long)mag.m.x * mag.m.x + (long)mag.m.y * mag.m.y + (long)mag.m.z * mag.m.z)); // L2 norm of magnetic strength
-  //unsigned retval = (unsigned)((L2Answer - 1000.0) / 50.0);
-  //return retval;
   return (abs(mag.m.x) + abs(mag.m.y) + abs(mag.m.z)) / 100u;
+}
+
+void MagSensor::update() {
+    mag.read();
 }
 
 MFRC522 mfrc522(RFID_SS_PIN, RFID_RST_PIN);  // Create RFID reader instance
@@ -162,13 +108,11 @@ void EchoMonitor::start(int freq) {
   pingTimer = millis();
   echo_distances[0] = echo_distances[1] = 1000;
 }
-bool EchoMonitor::update() {
+void EchoMonitor::update() {
   long duration, distance;
   if (millis() >= pingTimer) {   // pingSpeed milliseconds since last ping, do another ping.
     pingTimer += pingSpeed;      // Set the next ping time.
-    Wire.end(); // Avoids conflict with the timings
     distance = sonar[which_echo].ping_cm(50);
-    Wire.begin();
     if (distance > 0) {
       echo_distances[which_echo] = distance; 
     } else {

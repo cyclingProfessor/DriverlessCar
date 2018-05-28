@@ -1,4 +1,4 @@
-#include "lineFollow.h"
+#include "ProMini.h"
 
 //////////////////////////////////////////////////////////////////////////////////////
 // closed loop controller
@@ -18,9 +18,10 @@ void Controller::setDesiredValue(unsigned val) {
   desired = val;
 }
 
-void Controller::setConstants(float Kp, float Kd) {
-  this->Kp = Kp;
-  this->Kd = Kd;
+void Controller::setConstants(PID vals) {
+  this->Kp = -vals.Kp / 100.0f;
+  // Kd == 0 means no derivative term.
+  this->Kd = -vals.Kd / 100.0f;
 }
 
 void Controller::setActive(bool active) {
@@ -44,7 +45,7 @@ void Controller::correct()
   // If delta = 10, lastDelta = 20 then we are getting better, so we want to damp down the level.
   // In this case differential is -10 so can just add a multipl eof this to the level.
 
-  int level = neutralLevel + (delta / Kp); + (differential / Kd);
+  int level = neutralLevel + (delta / Kp) + (Kd == 0 ? 0 : (differential / Kd));
   //if (&sensor == &camera)
   //  Serial.println("Desired = " + String(desired) + " Actual = " + String(value) + " Delta = " + String(delta) + " Kp = " + String(Kp) + " Level = " + String(level));
   transducer.setLevel(level);
