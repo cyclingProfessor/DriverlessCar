@@ -1,96 +1,31 @@
 #include "ProMini.h"
 
-// Uses one digital output pin: MOVING_PIN
-// Other pins are all used for input - clocked in from the pins A0-A3
-// Hence we interrupt on CLOCK_PIN Rising.
-// Message: Type followed by....
-//     1-> next ONE byte is desired speed.
-//     2-> next ONE bytes are line value.
-//     3-> next FOUR bytes are Kd, Kp
-//     4-> next FOUR bytes are Wait Time, Angle, Speed, Duration
-/////////////////////////////////////////////////////////////////////////
-// Each data set is followed by a ready flag.
-// Main should only read the data when the ready flag is set  to 1.
-byte data[24];
-#define SPEED_MSG 7
-#define PID_MSG 9
-#define TURN_MSG 11
-#define LINE_MSG 13
-
-#define SPEED_OFFSET 0
-#define LINE_OFFSET 2
-#define PID_OFFSET 4
-#define TURN_OFFSET 11
-#define READ_TYPE 0
-#define READ_DATA 1
-int data_count = 0;
-int data_offset = 0;
-int read_state = READ_TYPE;
-
-void readData() {
-  byte value = 0;
-  if (digitalRead(A3) == HIGH) {
-    value |= 8;
-  }
-  if (digitalRead(A2) == HIGH) {
-    value |= 4;
-  }
-  if (digitalRead(A1) == HIGH) {
-    value |= 2;
-  }
-  if (digitalRead(A0) == HIGH) {
-    value |= 1;
-  }
-  switch (read_state) {
-    case READ_TYPE:
-      switch(value) {
-        case SPEED_MSG:
-          data_offset = SPEED_OFFSET;
-          data_count = 1;
-          break;
-        case LINE_MSG:
-          data_offset = LINE_OFFSET;
-          data_count = 1;
-          break;
-        case PID_MSG:
-          data_offset = PID_OFFSET;
-          data_count = 4;
-          break;
-        case TURN_MSG:
-          data_offset = TURN_OFFSET;
-          data_count = 4;
-          break;
-      }
-      data[data_offset + data_count] = 0;
-      read_state = READ_DATA;
-      break;
-    case READ_DATA:
-      data[data_offset++] = value;
-      data_count--;
-      if (data_count == 0) {
-         data[data_offset] = 1;
-         read_state = READ_TYPE;
-      }
-      break;
-  }
-}
+////////////////////////////////// Protocol used between ProMini and Arduino //////
+Message messages[NUM_CODES] = {
+  {SPEED_MSG, SPEED_LENGTH},
+  {LINE_MSG, LINE_LENGTH},
+  {PID_MSG, PID_LENGTH},
+  {TURN_MSG, TURN_LENGTH}
+};
 
 /////////////// Configuration values ////////////////////////////////////////////////
 // Time in milliseconds between control loops
-#define DELTA_TIME 30
+#define LINE_UPDATE 30
+#define SPEED_UPDATE 9
 
 ////////////// GLOBAL STATE ///////////////////////////////////////////////////////
 volatile unsigned tacho = 0;                      // Count of tacho clicks
-int currentSpeed = 0;
+int currentSpeed = 0;                             // Global desired speed.
 
 // Define devices
 Motor   motor(DIR_PIN2, DIR_PIN1, SPEED_PIN);   // The h-Bridge motor
 Steerer turner;            // The steering servo
 SpeedSensor speedSensor;   // The derived device for calculating speed
-LineSensor lineSensor;
+LineSensor lineSensor;  // Pseudo sensor that corresponds to byte in data[]
+volatile Arduino arduino;      // Object that manages comms, including the ISR stuff
 
-Controller speedSetter(speedSensor, motor, MIN_MOTOR_POWER, DELTA_TIME, 0.1f, 1000.0f);
-Controller lineFollower(lineSensor, turner, NEUTRAL_ANGLE, DELTA_TIME, -0.6f, 1000.0f);
+Controller speedSetter(speedSensor, motor, MIN_MOTOR_POWER, SPEED_UPDATE, 0.1f, 1000.0f);
+Controller lineFollower(lineSensor, turner, NEUTRAL_ANGLE, LINE_UPDATE, -0.6f, 1000.0f);
 
 void setup()
 {
@@ -102,57 +37,53 @@ void setup()
   motor.setDirection(FORWARDS);
   motor.off();
   turner.steer(NEUTRAL_ANGLE);
-
-  pinMode(CLOCK_PIN, INPUT);
-  pinMode(A0,INPUT);
-  pinMode(A1,INPUT);
-  pinMode(A2,INPUT);
-  pinMode(A3,INPUT);
-  pinMode(MOVING_PIN, OUTPUT);
-  attachInterrupt (digitalPinToInterrupt (CLOCK_PIN), readData, RISING);
+  Serial.println("Starting Pro Mini");
 }
 
 #define FOLLOWING 101
 #define IN_TURN 103
 #define WAIT_TURN 105
 
-long startTime;
-long startTacho;
-int moveState = FOLLOWING;
+long startTime; // Used to stay in one state for a while.
+long startTacho; //Used to stay in one state for a certain distance moved.
+int moveState = FOLLOWING; // FOLLOWING or TURNING of some kind
+
+byte turnBuffer[4]; // Maximum length of any data transfer
+byte single; // Used to (temporarily) hold single bytes read from Arduino
 
 void loop()
 {
-  if (data[TURN_OFFSET + 4] == 1) { // We may need to start a turn 
-    // received new turn parameters.
-    digitalWrite(MOVING_PIN, HIGH); // Tell the boss.
-    motor.off();
+  if (arduino.getData(LINE_MSG, &single)) {
+    lineSensor.setValue(single);
+    Serial.print("Got Line Data: "); Serial.println(single);
+  }
+  if (arduino.getData(SPEED_MSG, &single)) {
+    setSpeed(single); // Whether or not turning we may change speed.
+    Serial.print("Got Speed Request: "); Serial.println(single);
+  }
+  if (arduino.getData(TURN_MSG, turnBuffer)) { // We may need to start a turn
+    digitalWrite(MOVING_PIN, HIGH); // Tell the boss we have started.
+    setSpeed(0);
     startTime = millis();
-    data[TURN_OFFSET + 4] = 0;
     moveState = WAIT_TURN; // Now the turn will start....
   }
   switch (moveState) {
     case FOLLOWING: // We may need to get new PID constants
-      if (data[PID_OFFSET + 4] == 1) {
-        int Kp = data[PID_OFFSET] << 4 + data[PID_OFFSET + 1];
-        int Kd = data[PID_OFFSET + 2] << 4 + data[PID_OFFSET + 3];
-        data[PID_OFFSET + 4] = 0;
-      }
-      setSpeed(data[SPEED_OFFSET]); // Always read the speed data)
+      lineFollower.setActive(true);
       break;
     case WAIT_TURN:
-      if (millis() > startTime + data[TURN_OFFSET] * 4) {
+      if (millis() > startTime + 4 * turnBuffer[0]) {
         startTacho = tacho;
-        setSpeed(data[TURN_OFFSET + 1]);
-        setTurn(data[TURN_OFFSET + 2]);
+        setSpeed(turnBuffer[1]);
+        setTurn(turnBuffer[2]);
         moveState = IN_TURN;
       }
       break;
     case IN_TURN:
-      if (tacho > startTacho + data[TURN_OFFSET + 3] * 5) {
-         speedSetter.setActive(false);
-         motor.off();
-         digitalWrite(MOVING_PIN, LOW); // Tell the boss.
-         moveState = FOLLOWING;
+      if (tacho > startTacho + 5 * turnBuffer[3]) {
+        setSpeed(0);
+        digitalWrite(MOVING_PIN, LOW); // Tell the boss we have finished.
+        moveState = FOLLOWING;
       }
       break;
   }
@@ -161,7 +92,7 @@ void loop()
 }
 
 void setTurn(byte where) {
-  turner.steer(NEUTRAL_ANGLE + (((where - 7) * 50) / 8));
+  turner.steer(NEUTRAL_ANGLE + (((where - MID_POINT) * TURN_SCALE) / (MID_POINT + 1)));
 }
 
 void setSpeed(byte speed) {
@@ -170,11 +101,12 @@ void setSpeed(byte speed) {
     motor.off();
     return;
   }
-  if (currentSpeed * (speed - 7) < 0) {
+  int nextSpeed = ((speed - MID_POINT) * SPEED_SCALE) / (MID_POINT + 1);
+  if (currentSpeed * nextSpeed < 0) {
     speedSensor.restart();
     motor.setDirection(currentSpeed < 0 ? FORWARDS : BACKWARDS);
   }
-  currentSpeed = ((speed - 7) * 100) / 8;
-  speedSetter.setDesiredValue(currentSpeed);
+  currentSpeed = nextSpeed;
+  speedSetter.setDesiredValue(currentSpeed > 0 ? currentSpeed : - currentSpeed);
   speedSetter.setActive(true);
 }

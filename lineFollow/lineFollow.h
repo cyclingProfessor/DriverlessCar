@@ -15,8 +15,8 @@
 #define TRIGGER_PIN_RIGHT    6  // Arduino pin tied to trigger pin on ping sensor.
 #define ECHO_PIN_RIGHT       9  // Arduino pin tied to echo pin on ping sensor.
 #define CAMERA_PIN           8 // Arduino pin tied to control pin on OpenMV camera
-#define CLOCK_PIN            4 // digital pin - true-> follow or false-> steer
-#define MOVING_PIN           8 // Am I trying to move?
+#define CLOCK_PIN            2 // digital pin - true-> follow or false-> steer
+#define MOVING_PIN           10 // Am I trying to move?
 
 #define MIN_CAR_SPEED 0u
 #define MAX_CAR_SPEED 100u
@@ -32,14 +32,12 @@
 ///////////////////////////////////////////////
 /// State machine constants
 #define FOLLOWING 0
-#define USER_STOPPED 3
-#define OBSTACLE_STOPPED 4
+#define USER_STOPPED 1
+#define OBSTACLE_STOPPED 2
 
-#define THREEPOINT 5
-#define THREEPOINT_ONE 6
-#define THREEPOINT_TWO 7
-#define THREEPOINT_THREE 8
-#define THREEPOINT_FINISH 9
+#define THREEPOINT 3
+#define THREEPOINT_ONE 4
+#define THREEPOINT_FINISH 5
 
 /////////////////////////////
 struct TurnParams {
@@ -139,8 +137,6 @@ void threePoint();
 int check_obstacles();
 bool magnetic_strip();
 byte process_rfid(Status *);
-void stop();
-void follow(int speed);
 void report(Status &, unsigned count, char **names, unsigned **values);
 
 #endif

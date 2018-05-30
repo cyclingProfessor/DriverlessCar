@@ -15,7 +15,7 @@
 // and cannot tell direction.  So it needs notice (restart) if switching direction.
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
-// Interupt for speed sensor
+// Interrupt for speed sensor
 /////////// Circular buffer of previous tacho clicks ////////////////////////
 volatile unsigned long usecTimes[TIME_AVERAGE];
 volatile byte currentSpeedTime = TIME_AVERAGE_MASK; // Will start at position zero in the circular buffer
@@ -61,6 +61,9 @@ unsigned SpeedSensor::getNormalisedValue() {
   return 3000u / (millis() - usecTimes[(index + 2) & TIME_AVERAGE_MASK]);
 }
 
+void LineSensor::setValue(unsigned read) {
+  value = read;
+}
 unsigned LineSensor::getNormalisedValue() {
-  return (data[LINE_OFFSET] * 100) / 16;
+  return value;
 }
