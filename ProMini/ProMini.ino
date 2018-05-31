@@ -39,6 +39,10 @@ void setup()
   turner.steer(NEUTRAL_ANGLE);
   lineFollower.setDesiredValue(50);
   Serial.println("Starting Pro Mini");
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
+
+  arduino.start();
 }
 
 #define FOLLOWING 101
@@ -57,6 +61,8 @@ void loop()
   if (arduino.getData(LINE_MSG, &single)) {
     lineSensor.setValue(single);
     Serial.print("Got Line Data: "); Serial.println(single);
+    // Blue light on for first line Data!
+    digitalWrite(LED_BUILTIN, HIGH);    // turn the LED off by making the voltage LOW
   }
   if (arduino.getData(SPEED_MSG, &single)) {
     setSpeed(single); // Whether or not turning we may change speed.
