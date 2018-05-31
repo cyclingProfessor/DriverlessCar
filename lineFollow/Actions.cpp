@@ -57,27 +57,59 @@ void report(Status &status, unsigned paramCount, char **paramNames, unsigned **p
 }
 
 // Do all of the communication with the Pro Mini
-void ProMini::stop() {
-  // set up data lines to zero.
-  // if we have just stopped then switch control line on then off again.
-}
-void ProMini::setFollowing() {
-  // set control lines to desired speed if its new
-  // set PID parameters if they are new
-  // If new parameters then send the right commands
-}
-void ProMini::sendTurn(int which) {
-  // Always set the data and start a turn
-}
-bool ProMini::moveEnded() {
-  return digitalRead(MOVING_PIN) == LOW;
+void ProMini::setStopped() {
+  if (speed != 0) {
+    speed = 0;
+    send(SPEED_MSG);
+    send(speed);
+  }
 }
 
-ProMini::ProMini(int clock, int isMoving): clockPin(clock), isMovingPin(isMoving){
-  pinMode(clock, OUTPUT);
-  pinMode(isMoving, INPUT);
-  pinMode(A0, OUTPUT);
-  pinMode(A1, OUTPUT);
-  pinMode(A2, OUTPUT);
-  pinMode(A3, OUTPUT);
+void ProMini::setFollowing() {
+  send(LINE_MSG);
+  send(camera.getNormalisedValue());
+  if (speed != status.desiredSpeed) {
+    speed = status.desiredSpeed;
+    send(SPEED_MSG);
+    send((speed * 7 / 100) + 7); //always positive
+  }
+}
+void ProMini::setTurn(int which) {
+  // Always set the data and start a turn
+  // send(TURN_MSG);
+  // Send four parameters from status
+}
+
+bool foundHigh = false;
+bool ProMini::getMoveEnded() {
+  if (!foundHigh && (digitalRead(isMovingPin) == HIGH)) {
+    foundHigh = true;
+    return false;
+  }
+  return digitalRead(isMovingPin) == LOW;
+}
+
+ProMini::ProMini(int clock, int isMoving, int pins[4]): clockPin(clock), isMovingPin(isMoving){
+  pinMode(clockPin, OUTPUT);
+  pinMode(isMovingPin, INPUT);
+  for (int index = 0 ; index < 4 ; index++) {
+    dataPins[index] = pins[index];
+    pinMode(dataPins[index], OUTPUT);
+  }
+}
+
+void ProMini::start() {
+  // Send registration codes
+  for (int index = 0 ; index < 6 ; index++) {
+    send((7 * index + 3) & 0xF);
+  }  
+}
+
+void ProMini::send(byte b) {
+  delay(4);
+  for (int index = 0 ; index < 4 ; index++) {
+    digitalWrite(dataPins[index], (b & (1 << index)) > 0 ? HIGH : LOW);
+  }
+  digitalWrite(clockPin, LOW);
+  digitalWrite(clockPin, HIGH);
 }

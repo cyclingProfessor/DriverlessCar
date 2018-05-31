@@ -62,7 +62,8 @@ unsigned SpeedSensor::getNormalisedValue() {
 }
 
 void LineSensor::setValue(unsigned read) {
-  value = read;
+  value = (read * 50) / 7 ; // now 7 should be 50, 0-> 0, 15 ->100
+
 }
 unsigned LineSensor::getNormalisedValue() {
   return value;

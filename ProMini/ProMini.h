@@ -117,7 +117,7 @@ class Sensor {
 
 class LineSensor : public Sensor {
   private:
-    unsigned value = MID_POINT;
+    unsigned value = 50;
   public:
     void setValue(unsigned);
     unsigned getNormalisedValue();

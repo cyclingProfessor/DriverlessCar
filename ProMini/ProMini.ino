@@ -37,6 +37,7 @@ void setup()
   motor.setDirection(FORWARDS);
   motor.off();
   turner.steer(NEUTRAL_ANGLE);
+  lineFollower.setDesiredValue(50);
   Serial.println("Starting Pro Mini");
 }
 
@@ -107,6 +108,6 @@ void setSpeed(byte speed) {
     motor.setDirection(currentSpeed < 0 ? FORWARDS : BACKWARDS);
   }
   currentSpeed = nextSpeed;
-  speedSetter.setDesiredValue(currentSpeed > 0 ? currentSpeed : - currentSpeed);
+  speedSetter.setDesiredValue(currentSpeed > 0 ? currentSpeed : -currentSpeed);
   speedSetter.setActive(true);
 }

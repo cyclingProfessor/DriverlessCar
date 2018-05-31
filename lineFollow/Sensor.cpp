@@ -25,16 +25,12 @@ unsigned CameraSensor::getNormalisedValue() {
 	if (!watching) {
 		return 0; // This should never happen
 	}
-	int32_t temp = 0;
-    char buff[10] = {0};
-
-    Wire.requestFrom(0x12, 9);
-    while(Wire.available()) {
-        buff[temp++] = Wire.read();
-    }
-    buff[temp] = '\0';
-    int retval = atoi(buff + 5);
-    return retval != -1 ? retval : 50 ;
+  byte value = 7;
+  Wire.requestFrom(0x12, 1);
+  if (Wire.available()) {
+    value = Wire.read();
+  }
+  return value;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////

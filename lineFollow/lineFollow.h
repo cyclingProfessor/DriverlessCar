@@ -39,6 +39,37 @@
 #define THREEPOINT_ONE 4
 #define THREEPOINT_FINISH 5
 
+////////////////////////////////////////////
+// Constants for message passing
+// Uses one digital output pin: MOVING_PIN
+// Other pins are all used for input - clocked in from the pins A0-A3
+// Hence we interrupt on CLOCK_PIN Rising.
+// Message: Type followed by....
+//     1-> next ONE byte is desired speed.
+//     2-> next ONE bytes are line value.
+//     3-> next FOUR bytes are Kd, Kp
+//     4-> next FOUR bytes are Wait Time, Angle, Speed, Duration
+/////////////////////////////////////////////////////////////////////////
+// Each data set is followed by a ready flag.
+// Main should only read the data when the ready flag (freshness indicator) is set.
+#define NUM_CODES 4 // How many message types
+
+#define SPEED_MSG 7
+#define SPEED_LENGTH 1
+
+#define PID_MSG 9
+#define PID_LENGTH 4
+
+#define TURN_MSG 11
+#define TURN_LENGTH 4
+
+#define LINE_MSG 13
+#define LINE_LENGTH 1
+
+#define MID_POINT ((1 << 3) - 1) // The middle value of a four bit message value.
+#define SPEED_SCALE 100 // speed -100 to 100
+#define TURN_SCALE 50 // turn -50 to 50
+
 /////////////////////////////
 struct TurnParams {
   unsigned speedStep1;
@@ -117,12 +148,16 @@ class ProMini {
   private:
     const int clockPin;
     const int isMovingPin;
+    int dataPins[4];  // truly are const but cannot be initialised as such!
+    int speed = -1;
+    void send(byte);
   public:
-    static void stop();
-    static void setFollowing();
-    static bool moveEnded();
-    static void sendTurn(int which);
-    ProMini(int clock, int isMoving);
+    void start();
+    void setStopped();
+    void setFollowing();
+    bool getMoveEnded();
+    void setTurn(int which);
+    ProMini(int clock, int isMoving, int pins[4]);
 };
 
 extern int echo_distances[2];
@@ -131,6 +166,7 @@ extern RFID rfid;
 extern MagSensor magSensor;                            // The magnetic sensor
 extern CameraSensor camera;                            // OpenMV camera
 extern ProMini proMini;
+extern Status status;
 
 void processBT(Status &, unsigned count, char **names, unsigned **values);
 void threePoint();

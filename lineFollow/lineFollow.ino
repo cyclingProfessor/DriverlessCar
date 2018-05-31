@@ -11,7 +11,8 @@ int echo_distances[2];
 RFID    rfid;                                   // The RFID reader
 MagSensor magSensor;                            // The magnetic sensor
 CameraSensor camera(CAMERA_PIN);                // The OpenMV camera
-ProMini proMini(CLOCK_PIN, MOVING_PIN);
+static int msg_pins[] = {A0,A1,A2,A3};
+ProMini proMini(CLOCK_PIN, MOVING_PIN, msg_pins);
 
 Status status; // global status
 
@@ -32,19 +33,23 @@ void setup()
   Serial.begin(115200);
 
   while (!Serial);    // Do nothing if no serial port is opened
-  Wire.begin(); // Begins comms to I2C devices.
+  Serial.println("Comms established");
 
+  Wire.begin(); // Begins comms to I2C devices.
   rfid.start();
   magSensor.start();
   EchoMonitor::start(250);
+  Serial.println("Sensors started");
 
-  status.desiredSpeed = (MAX_CAR_SPEED - MIN_CAR_SPEED) / 3;
-  proMini.stop();
+  status.desiredSpeed = (MAX_CAR_SPEED - MIN_CAR_SPEED) / 6;
+  proMini.start();
+  proMini.setStopped();
 
   // In the beginning we wait for a BT start command
   status.state = USER_STOPPED;
   status.saveState = FOLLOWING; // The state to move to after we finish being stopped
   strncpy(status.lastTag, "NONE YET", 16);
+  Serial.println("Awaiting your commands");
 }
 
 #define OBSTACLE_STOP 20  // see something at this distance and stop
@@ -82,7 +87,7 @@ void loop()
       proMini.setFollowing();
       break;
     case OBSTACLE_STOPPED:
-      proMini.stop();
+      proMini.setStopped();
       if (check_obstacles() > OBSTACLE_START && !magnetic_strip()) {
         status.state = status.saveState;
       }
@@ -90,22 +95,22 @@ void loop()
 
     // The next states are for random three point turns - induced by RFID.
     case THREEPOINT: // start first move
-      proMini.sendTurn(0);
+      proMini.setTurn(0);
       status.state = THREEPOINT_ONE;
       break;
     case THREEPOINT_ONE: // Completing first move (marked by tacho)
-      if (proMini.moveEnded()) {
-        proMini.sendTurn(1);
+      if (proMini.getMoveEnded()) {
+        proMini.setTurn(1);
         status.state = THREEPOINT_FINISH;
       }
       break;
     case THREEPOINT_FINISH: // completing second move (marked by tacho)
-      if (proMini.moveEnded()) {
+      if (proMini.getMoveEnded()) {
         status.state = FOLLOWING;
       }
       break;
     case USER_STOPPED:
-      proMini.stop();
+      proMini.setStopped();
       camera.calibrate();
       break;
     default:

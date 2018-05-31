@@ -28,7 +28,7 @@ LAMBDA = 0.0 # rolling average constant: nval = lambda * oval + (1-lambda) * nva
 
 sensor.reset()
 sensor.set_pixformat(sensor.RGB565)
-sensor.set_framesize(sensor.QVGA)
+sensor.set_framesize(sensor.B128X64)
 sensor.skip_frames(time = 2000)
 sensor.set_auto_gain(False) # must be turned off for color tracking
 sensor.set_auto_whitebal(False) # must be turned off for color tracking
@@ -41,6 +41,7 @@ bus.deinit() # Fully reset I2C device...
 bus = pyb.I2C(2, pyb.I2C.SLAVE, addr=0x12)
 
 activePin = Pin('P6', Pin.IN, Pin.PULL_DOWN)
+clock = time.clock()                # Create a clock object to track the FPS.
 
 # Color Tracking Thresholds (L Min, L Max, A Min, A Max, B Min, B Max)
 # thresholds = [(0, 100, -57, -17, -35, 3)] # generic_green band insulation tape - many light conditions
@@ -56,9 +57,9 @@ def leds(on_arr):
 def show(posn): # passed normalised value from 0 to 100 (or less than 0 for NONE)
     if posn < 0: # Magenta for "I am Lost"
         leds((True, False, True))
-    elif (posn <= 40): # RED
+    elif (posn <= 6): # RED
         leds((True, False, False))
-    elif (posn < 60): # WHITE
+    elif (posn < 8): # WHITE
         leds((True, True, True))
     else: # GREEN
         leds((False, True, False))
@@ -71,22 +72,21 @@ def calibrate(): # if not calibrated then swithces leds on for one call, off for
 current_position = -1 # I am LOST
 def sendData():
     global current_position
+    clock.tick()
     img = sensor.snapshot()
     show(current_position) # turns on leds
 
     save_position = current_position
     current_position = -1
-    for blob in img.find_blobs(thresholds, x_stride=3, y_stride=3, pixels_threshold=10, area_threshold=8, roi=(0,100, 320, 20),merge=True, margin=5):
+    for blob in img.find_blobs(thresholds, x_stride=3, y_stride=3, pixels_threshold=10, area_threshold=8, roi=(0,35, 128, 10),merge=True, margin=5):
         img.draw_rectangle(blob.rect())
         img.draw_cross(blob.cx(), blob.cy())
-        current_position = int(save_position * LAMBDA + blob.cx() * 100 / WIDTH * (1 - LAMBDA))
+        current_position = int(save_position * LAMBDA + blob.cx() * 15 / WIDTH * (1 - LAMBDA))
     show(current_position) # turns on leds
-
-    text = "XPOS:{:04d}".format(current_position)
-    data = ustruct.pack("<%ds" % len(text), text)
-    print(text)
+    print(current_position)
+    print(clock.fps())              # Note: OpenMV Cam runs about half as fast when connected
     try:
-        bus.send(data, timeout=500) # Send the data second.
+        bus.send(current_position, timeout=500) # Send the data second.
     except OSError as err:
         pass
 
