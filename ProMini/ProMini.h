@@ -57,7 +57,7 @@
 
 #define MID_POINT ((1 << 3) - 1) // The middle value of a four bit message value.
 #define SPEED_SCALE 100 // speed -100 to 100
-#define TURN_SCALE 50 // turn -50 to 50
+#define TURN_SCALE (MAX_ANGLE - MIN_ANGLE) // turn -50 to 50
 
 // Constants for a base 2 circular buffer - TIME_AVERAGE must be a power of two
 #define TIME_AVERAGE (1 << 3)  // How many spot times we use to get current speed
@@ -174,7 +174,7 @@ class Arduino {
     void readData();         // ISR
     friend void clockPinIsr();
   public:
-    Arduino();               // set pin modes, assign interrupt, build data structures
+    start();               // set pin modes, assign interrupt, build data structures
     bool getData(byte code, byte *buffer); // (Safe) Read of latest complete data
 };
 
