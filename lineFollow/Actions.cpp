@@ -71,13 +71,36 @@ void ProMini::setFollowing() {
   if (speed != status.desiredSpeed) {
     speed = status.desiredSpeed;
     send(SPEED_MSG);
-    send((speed * 7 / 100) + 7); //always positive
+    send(toSpeedByte(speed)); //always positive
   }
 }
+
+////////////////////////////////////////////////////////////////////
+//calculates inverse of: ((byte - MID_POINT) * SPEED_SCALE) / (MID_POINT + 1);
+// since this is what is done on the Pro Mini
+byte ProMini::toSpeedByte(int s) {
+  return (s * (MID_POINT + 1) / SPEED_SCALE) + MID_POINT;
+}
+
+////////////////////////////////////////////////////////////////////
+//calculates inverse of: NEUTRAL_ANGLE + (((byte - MID_POINT) * TURN_SCALE) / (MID_POINT + 1));
+// since this is what is done on the Pro Mini
+byte ProMini::toTurnByte(int t) {
+  return (t - NEUTRAL_ANGLE) * (MID_POINT + 1) / TURN_SCALE + MID_POINT;
+}
+
 void ProMini::setTurn(int which) {
   // Always set the data and start a turn
-  // send(TURN_MSG);
-  // Send four parameters from status
+  send(TURN_MSG);
+  send(10); // Wait for 30 ms before turning
+  if (which == 0) {
+    send(toSpeedByte(status.turnParams.speedStep1));
+    send(toTurnByte(status.turnParams.turnStep1));
+  } else {
+    send(toSpeedByte(status.turnParams.speedStep2));
+    send(toTurnByte(status.turnParams.turnStep2));
+  }
+  send(12);
 }
 
 bool foundHigh = false;

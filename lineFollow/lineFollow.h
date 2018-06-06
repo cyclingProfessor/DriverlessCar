@@ -28,6 +28,12 @@
 #define ECHO_RIGHT 1
 #define MAX_DISTANCE 50
 
+// Parameters for turn settings.
+#define MIN_ANGLE 10u //neutral is 65-70 degrees
+#define NEUTRAL_ANGLE 65u
+#define MAX_ANGLE 105u
+#define MIN_CAR_SPEED 0u
+#define MAX_CAR_SPEED 100u
 
 ///////////////////////////////////////////////
 /// State machine constants
@@ -150,6 +156,8 @@ class ProMini {
     const int isMovingPin;
     int dataPins[4];  // truly are const but cannot be initialised as such!
     int speed = -1;
+    byte toSpeedByte(int speed);
+    byte toTurnByte(int angle);
     void send(byte);
   public:
     void start();
