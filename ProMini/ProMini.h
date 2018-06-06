@@ -66,7 +66,7 @@
 //////////////////////////////////////////
 class Transducer {
   public:
-    virtual void setLevel(int what) = 0;
+    virtual void setLevel(unsigned what) = 0;
 };
 
 struct PID {
@@ -91,7 +91,7 @@ class Motor: public Transducer {
   public:
     Motor(int p1, int p2, int c);
     void setDirection(int direction);
-    void setLevel(int speed);
+    void setLevel(unsigned speed);
     void setSpeed(unsigned value); // bounds input to "effective" speeds.
     void off();  // needed as setSpeed(0) cannot work.  Speeds from 0 to MIN_MOTOR_POWER just whine!
 };
@@ -102,7 +102,7 @@ class Steerer: public Transducer {
     Servo servo;
   public:
     void start();
-    void setLevel(int angle);
+    void setLevel(unsigned angle);
     void steer(unsigned angle);
     void neutral();
 };
@@ -161,20 +161,20 @@ class Arduino {
     unsigned dataOffset[16]; // indexed by data code -> offset in data stores
     unsigned dataLength[16]; // indexed by data code -> length in data store
     byte *liveData;      // data for program to read from
-    byte *data;          // ISR data to write to
-    int data_length;         //Length expected for current message
-    int data_count = 0;      // how much data we have left to read for this code
-    int data_start;          // offset in data arrays for this message data
-    byte *data_ptr;          // where we are reading the next data byte 
-    bool read_code = true;   // First byte to read is a code byte
+    byte * volatile data;          // ISR data to write to
+    volatile int data_length;         //Length expected for current message
+    volatile int data_count = 0;      // how much data we have left to read for this code
+    volatile int data_start;          // offset in data arrays for this message data
+    volatile byte *data_ptr;          // where we are reading the next data byte 
+    volatile bool read_code = true;   // First byte to read is a code byte
     byte registerCode[6];    // We cannot begin until we receive this.
     void buildData();        // build dereferencing structures
     static byte readPins();  // Utility function to read Data pins
-    bool started = false;
+    volatile bool started = false;
     void readData();         // ISR
     friend void clockPinIsr();
   public:
-    start();               // set pin modes, assign interrupt, build data structures
+    void start();               // set pin modes, assign interrupt, build data structures
     bool getData(byte code, byte *buffer); // (Safe) Read of latest complete data
 };
 
@@ -182,7 +182,7 @@ class Arduino {
 extern Controller speedSetter, lineFollower; //PID controllers
 extern volatile unsigned tacho;    // Count of tacho clicks
 extern SpeedSensor speedSensor;    // The derived device for calculating speed
-extern volatile Arduino arduino;            // object for messaging
+extern Arduino arduino;            // object for messaging
 extern Motor   motor;   // The h-Bridge motor
 extern Steerer turner;  // Servo for front wheel steering
 extern Message messages[NUM_CODES];

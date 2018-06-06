@@ -22,7 +22,7 @@ Motor   motor(DIR_PIN2, DIR_PIN1, SPEED_PIN);   // The h-Bridge motor
 Steerer turner;            // The steering servo
 SpeedSensor speedSensor;   // The derived device for calculating speed
 LineSensor lineSensor;  // Pseudo sensor that corresponds to byte in data[]
-volatile Arduino arduino;      // Object that manages comms, including the ISR stuff
+Arduino arduino;      // Object that manages comms, including the ISR stuff
 
 Controller speedSetter(speedSensor, motor, MIN_MOTOR_POWER, SPEED_UPDATE, 0.1f, 1000.0f);
 Controller lineFollower(lineSensor, turner, NEUTRAL_ANGLE, LINE_UPDATE, -0.6f, 1000.0f);
@@ -50,7 +50,7 @@ void setup()
 #define IN_TURN 103
 #define WAIT_TURN 105
 
-long startTime; // Used to stay in one state for a while.
+unsigned long startTime; // Used to stay in one state for a while.
 unsigned startTacho; //Used to stay in one state for a certain distance moved.
 int moveState = FOLLOWING; // FOLLOWING or TURNING of some kind
 
@@ -109,7 +109,7 @@ void loop()
     case IN_TURN:
 //      Serial.print(tacho); Serial.print(" = tacho Compared to "); Serial.println(startTacho + 5 * turnBuffer[3]);
       if (tacho > startTacho + 5 * turnBuffer[3]) {
-//        Serial.println("Turn Ended");
+        Serial.println("Turn Ended");
         setSpeed(0);
         digitalWrite(MOVING_PIN, LOW); // Tell the boss we have finished.
         moveState = FOLLOWING;

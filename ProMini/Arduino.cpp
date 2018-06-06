@@ -5,7 +5,7 @@ void clockPinIsr() {
   arduino.readData();
 }
 
-Arduino::start() {
+void Arduino::start() {
   pinMode(CLOCK_PIN, INPUT);
   pinMode(DATA_0,INPUT);
   pinMode(DATA_1,INPUT);
@@ -30,8 +30,8 @@ void Arduino::buildData() {
     dataLength[messages[index].code] = messages[index].length; // Fast lookup of 
   }
   // Now allocate actual data buffers
-  liveData = malloc(offset);
-  data = malloc(offset);
+  liveData = (byte *) malloc(offset);
+  data = (byte *) malloc(offset);
   for (int index = 0 ; index < offset ; index++) {
     liveData[index] = data[index] = 0;
   }
@@ -114,4 +114,5 @@ bool Arduino::getData(byte code, byte *buffer) {
   liveData[offset + length] = 0; // reset freshness indicator
   memcpy(buffer, liveData + data_start, data_length);
   interrupts();
+  return true;
 }

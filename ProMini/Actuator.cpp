@@ -3,7 +3,7 @@
 //////////////////////////////////////////////////////////////////////////
 // Utility function to bound the value of an int between two set values
 //////////////////////////////////////////////////////////////////////////
-static void bound(int *what, int low, int high) {
+static void bound(unsigned *what, unsigned low, unsigned high) {
   if (*what < low) {
     *what = low;
   }
@@ -35,7 +35,7 @@ void Motor::setDirection(int direction) {
   }
 }
 
-void Motor::setLevel(int speed) {
+void Motor::setLevel(unsigned speed) {
   setSpeed(speed);
 }
 
@@ -50,7 +50,7 @@ void Steerer::start() {
   this->neutral();
 }
 
-void Steerer::setLevel(int angle) {
+void Steerer::setLevel(unsigned angle) {
   bound(&angle, NEUTRAL_ANGLE - 18, NEUTRAL_ANGLE + 25);
   steer(angle);
 }
