@@ -18,11 +18,23 @@
 // Interrupt for speed sensor
 /////////// Circular buffer of previous tacho clicks ////////////////////////
 volatile unsigned long usecTimes[TIME_AVERAGE];
-volatile byte currentSpeedTime = TIME_AVERAGE_MASK; // Will start at position zero in the circular buffer
+volatile byte currentSpeedTime = TIME_AVERAGE - 1; // Start at final position in the circular buffer
+#define SPEED_CONSTANT 3000u // for turning time/clicks into speed.
+#define TIME_OFFSET (4 * TIME_AVERAGE * SPEED_CONSTANT) // offset time so that initial speed can be 0
+#define TICKS_PER (4)
+
+////////////////// DEBUG Variable /////////////////
+// volatile unsigned intrCounter = 0;
+// volatile unsigned long saveT = 555;
+static inline unsigned long adj_millis() {
+  return millis() + TIME_OFFSET;
+}
 
 void addToTacho() {
-  long t = millis();
+//  intrCounter++;
+  long t = adj_millis();
   if (t <= usecTimes[currentSpeedTime] + 2) {// TOO FAST => Bounce
+//    saveT = t;
     return;
   }
   currentSpeedTime = (currentSpeedTime + 1) & TIME_AVERAGE_MASK; // increment index
@@ -31,12 +43,12 @@ void addToTacho() {
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
+// Make the speed/distance sensor active
 void SpeedSensor::start() {
-  // Make the speed/distance sensor active
-  unsigned long nowTime = millis();
-  unsigned startTime = nowTime - (TIME_AVERAGE * 10000U); 
-  for (int i = 0 ; i < TIME_AVERAGE ; i++ ) {
-    usecTimes[i] = startTime + 10000U * i;  // This sets initial speed to zero.
+  // Create delta between adj_millis() past usecTimes[], so that speeds starts at 0
+  // usecTimes[TIME_AVERAGE - 1] must be approx adj_millis() so that all ticks count.
+  for (int index = 0 ; index < TIME_AVERAGE ; index++) {
+    usecTimes[index] = 4 * index * SPEED_CONSTANT;
   }
   attachInterrupt(digitalPinToInterrupt(SPEED_SENSOR_INTR), addToTacho, RISING);
   moving =true;
@@ -55,10 +67,9 @@ unsigned SpeedSensor::getNormalisedValue() {
     return 0;
   }
 
-  // Copy index so that it is coherent throughout calculation
-  byte index = currentSpeedTime;
-
-  return 3000u / (millis() - usecTimes[(index + 2) & TIME_AVERAGE_MASK]);
+  // Here index + (TIME_AVERAGE - M) is M ticks ago. 
+  byte index = (currentSpeedTime + (TIME_AVERAGE - TICKS_PER)) & TIME_AVERAGE_MASK;
+  return SPEED_CONSTANT / (adj_millis() - usecTimes[index]);
 }
 
 void LineSensor::setValue(unsigned read) {
