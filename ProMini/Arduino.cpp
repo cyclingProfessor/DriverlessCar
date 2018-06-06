@@ -12,6 +12,8 @@ Arduino::start() {
   pinMode(DATA_2,INPUT);
   pinMode(DATA_3,INPUT);
   pinMode(MOVING_PIN, OUTPUT);
+  digitalWrite(MOVING_PIN, LOW); // Tell the boss we are not moving.
+
   buildData();
   for (int index = 0 ; index < 6 ; index++) {
     registerCode[index] = (7 * index + 3) & 0xF;
@@ -55,15 +57,15 @@ byte Arduino::readPins() {
 // volatile int eGotData = -1234;
 // volatile int eStarted = -5;
 // volatile byte eCode = 158;
-volatile byte neValue;
-volatile unsigned eCounter = 0;
-byte eValue = 123;
+// volatile byte neValue;
+// volatile unsigned eCounter = 0;
+// byte eValue = 123;
 
 ///////////////////////
 void Arduino::readData() { // ISR on rising edge of CLOCK_PIN
   byte value = readPins();
-  neValue = value;
-  eCounter++;
+  // neValue = value;
+  // eCounter++;
   if (!started) {
     data_count = (value == registerCode[data_count]) ? data_count + 1 : 0;
 //    eStarted = data_count;
@@ -93,14 +95,14 @@ void Arduino::readData() { // ISR on rising edge of CLOCK_PIN
 bool Arduino::getData(byte code, byte *buffer) {
 //  Serial.print("Got data!: "); Serial.println(eGotData);
 //  Serial.print("Code: "); Serial.println(eCode);
-  if (neValue != eValue) {
-    eValue = neValue;
-    Serial.print("Value: "); Serial.println(eValue);
-    Serial.print("Counter: "); Serial.println(eCounter);
-  }
-  if (!started) {
-    Serial.println("Not yet Started");
-  }
+  // if (neValue != eValue) {
+  //   eValue = neValue;
+  //   Serial.print("Value: "); Serial.println(eValue);
+  //   Serial.print("Counter: "); Serial.println(eCounter);
+  // }
+  // if (!started) {
+  //   Serial.println("Not yet Started");
+  // }
   unsigned offset = dataOffset[code];
   unsigned length = dataLength[code];
   if (!liveData[offset + length]) {
