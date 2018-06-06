@@ -43,6 +43,7 @@ void setup()
   digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
 
   arduino.start();
+//  Serial.print("Tacho is now: "); Serial.println(tacho);
 }
 
 #define FOLLOWING 101
@@ -50,44 +51,65 @@ void setup()
 #define WAIT_TURN 105
 
 long startTime; // Used to stay in one state for a while.
-long startTacho; //Used to stay in one state for a certain distance moved.
+unsigned startTacho; //Used to stay in one state for a certain distance moved.
 int moveState = FOLLOWING; // FOLLOWING or TURNING of some kind
 
 byte turnBuffer[4]; // Maximum length of any data transfer
 byte single; // Used to (temporarily) hold single bytes read from Arduino
 
+/////////////// Debug Variables ////////////
+// extern unsigned intrCounter;
+// extern unsigned long usecTimes[TIME_AVERAGE];
+// extern byte currentSpeedTime;
+// extern volatile unsigned long saveT;
 void loop()
 {
+//  Serial.print("Tacho is now: "); Serial.println(tacho);
+//  Serial.print("usecTimes[currentSpeedTime] is now: "); Serial.println(usecTimes[currentSpeedTime]);
+//  Serial.print("saveT is now: "); Serial.println(saveT);
+//  Serial.print("Tacho is now: "); Serial.println(tacho);
+//  Serial.print("IntrCount is now: "); Serial.println(intrCounter);
   if (arduino.getData(LINE_MSG, &single)) {
     lineSensor.setValue(single);
-    Serial.print("Got Line Data: "); Serial.println(single);
+    moveState = FOLLOWING;
+//    Serial.print("Got Line Data: "); Serial.println(single);
     // Blue light on for first line Data!
     digitalWrite(LED_BUILTIN, HIGH);    // turn the LED off by making the voltage LOW
   }
   if (arduino.getData(SPEED_MSG, &single)) {
     setSpeed(single); // Whether or not turning we may change speed.
-    Serial.print("Got Speed Request: "); Serial.println(single);
+//    Serial.print("Got Speed Request: "); Serial.println(single);
   }
   if (arduino.getData(TURN_MSG, turnBuffer)) { // We may need to start a turn
     digitalWrite(MOVING_PIN, HIGH); // Tell the boss we have started.
     setSpeed(0);
     startTime = millis();
     moveState = WAIT_TURN; // Now the turn will start....
+    Serial.print("Got Turn Request: ");
+    Serial.print("    Turn Speed:"); Serial.println(turnBuffer[1]);
+    Serial.print("    Turn Angle:"); Serial.println(turnBuffer[2]);
   }
   switch (moveState) {
     case FOLLOWING: // We may need to get new PID constants
       lineFollower.setActive(true);
       break;
     case WAIT_TURN:
+      lineFollower.setActive(false);
+//      Serial.print("Waiting State.  Wait time: "); Serial.println(turnBuffer[0]);
       if (millis() > startTime + 4 * turnBuffer[0]) {
         startTacho = tacho;
         setSpeed(turnBuffer[1]);
         setTurn(turnBuffer[2]);
         moveState = IN_TURN;
+//        Serial.println("Waiting State Finishes.  Setting Speed and Turn.");
+        Serial.print("    Waiting for Tacho: "); Serial.println(turnBuffer[3]);
+        Serial.print("    It begins at : "); Serial.println(startTacho);
       }
       break;
     case IN_TURN:
+//      Serial.print(tacho); Serial.print(" = tacho Compared to "); Serial.println(startTacho + 5 * turnBuffer[3]);
       if (tacho > startTacho + 5 * turnBuffer[3]) {
+//        Serial.println("Turn Ended");
         setSpeed(0);
         digitalWrite(MOVING_PIN, LOW); // Tell the boss we have finished.
         moveState = FOLLOWING;
@@ -98,11 +120,14 @@ void loop()
   speedSetter.correct();  // Adjusts speed if the controller is active
 }
 
-void setTurn(byte where) {
-  turner.steer(NEUTRAL_ANGLE + (((where - MID_POINT) * TURN_SCALE) / (MID_POINT + 1)));
+void setTurn(int where) {
+  Serial.print("Unconverted angle: "); Serial.println(where);
+  int angle = NEUTRAL_ANGLE + (((where - MID_POINT) * (int)TURN_SCALE) / (MID_POINT + 1));
+  Serial.print("Turning to angle: "); Serial.println(angle);
+  turner.steer(angle);
 }
 
-void setSpeed(byte speed) {
+void setSpeed(int speed) {
   if (speed == 0) {
     speedSetter.setActive(false);
     motor.off();
