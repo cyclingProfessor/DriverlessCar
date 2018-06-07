@@ -86,7 +86,10 @@ void loop() {
         Serial.println("Sent a TURN message.");
 
         Serial.println("Now wait for first move To End");
-        delay(100);
+        while (digitalRead(MOVING_PIN) != HIGH) {
+          Serial.println("Moving PIN Low");
+          delay(50);
+        }
         while (digitalRead(MOVING_PIN) != LOW) {
           Serial.println("Moving PIN High");
           delay(50);
@@ -104,6 +107,7 @@ void loop() {
         // Now wait for the MOVING_PIN to go low! With a cheeky timeout
         start = millis();
         Serial.println("Now wait for Moving To End");
+        while (digitalRead(MOVING_PIN) != HIGH) {}
         while (digitalRead(MOVING_PIN) != LOW) {}
         Serial.println("That's it then");
         break;
