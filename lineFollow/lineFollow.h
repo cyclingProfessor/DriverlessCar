@@ -155,7 +155,7 @@ class ProMini {
     const int clockPin;
     const int isMovingPin;
     int dataPins[4];  // truly are const but cannot be initialised as such!
-    int speed = -1;
+    byte speed = 0;
     byte toSpeedByte(int speed);
     byte toTurnByte(int angle);
     void send(byte);

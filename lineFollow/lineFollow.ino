@@ -1,8 +1,6 @@
 #include "lineFollow.h"
 
 /////////////// Configuration values ////////////////////////////////////////////////
-// Minimum Time in milliseconds between control loops
-#define DELTA_TIME 30
 
 ////////////// GLOBAL STATE ///////////////////////////////////////////////////////
 int echo_distances[2];
@@ -33,15 +31,18 @@ void setup()
   Serial.begin(115200);
 
   while (!Serial);    // Do nothing if no serial port is opened
-  Serial.println("Comms established");
+  Serial.println("#Comms established.");
 
   Wire.begin(); // Begins comms to I2C devices.
+  Serial.println("#Wire (I2C) started.");
   rfid.start();
+  Serial.println("#RFID Sensor started.");
   magSensor.start();
+  Serial.println("#Mag Sensor started.");
   EchoMonitor::start(250);
-  Serial.println("Sensors started");
+  Serial.println("#Ping Sensors started.");
 
-  status.desiredSpeed = (MAX_CAR_SPEED - MIN_CAR_SPEED) / 6;
+  status.desiredSpeed = (MAX_CAR_SPEED - MIN_CAR_SPEED) / 2;
   proMini.start();
   proMini.setStopped();
 
@@ -49,7 +50,7 @@ void setup()
   status.state = USER_STOPPED;
   status.saveState = FOLLOWING; // The state to move to after we finish being stopped
   strncpy(status.lastTag, "NONE YET", 16);
-  Serial.println("Awaiting your commands");
+  Serial.println("#Watching the world, awaiting your commands.");
 }
 
 #define OBSTACLE_STOP 20  // see something at this distance and stop
@@ -61,6 +62,7 @@ boolean stopped() {
 
 void loop()
 {
+  //Serial.println(millis());
   EchoMonitor::update();  // Checks ping distance if the time is right
   magSensor.update(); // Get the magnetic value under the car.
 

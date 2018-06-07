@@ -47,6 +47,7 @@ void report(Status &status, unsigned paramCount, char **paramNames, unsigned **p
   Serial.print("R" + String(status.lastTag) + ":END:");
   Serial.print("Dleft:" + String(echo_distances[0]) + " right:" + String(echo_distances[1]) + ":END:");
   Serial.print("M" + String(magSensor.getNormalisedValue()) + ":END:");
+  Serial.print("L" + String(camera.getNormalisedValue()) + ":END:");
   Serial.print("Z" + String(status.state) + ":END:");
   
   Serial.print("P");
@@ -90,25 +91,26 @@ byte ProMini::toTurnByte(int t) {
 }
 
 void ProMini::setTurn(int which) {
+  Serial.print("#Starting Turn: "); Serial.print(which + 1); Serial.println(" of two.");
   // Always set the data and start a turn
   send(TURN_MSG);
   send(10); // Wait for 30 ms before turning
   if (which == 0) {
-    send(toSpeedByte(status.turnParams.speedStep1));
-    send(toTurnByte(status.turnParams.turnStep1));
+    send(12);
+    send(10);
+    //send(toSpeedByte(status.turnParams.speedStep1));
+    //send(toTurnByte(status.turnParams.turnStep1));
   } else {
-    send(toSpeedByte(status.turnParams.speedStep2));
-    send(toTurnByte(status.turnParams.turnStep2));
+    send(4);
+    send(4);
+    // send(toSpeedByte(status.turnParams.speedStep2));
+    // send(toTurnByte(status.turnParams.turnStep2));
   }
   send(12);
+  delay(1000);
 }
 
-bool foundHigh = false;
 bool ProMini::getMoveEnded() {
-  if (!foundHigh && (digitalRead(isMovingPin) == HIGH)) {
-    foundHigh = true;
-    return false;
-  }
   return digitalRead(isMovingPin) == LOW;
 }
 
