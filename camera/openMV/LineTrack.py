@@ -4,6 +4,7 @@ import pyb, ustruct
 from pyb import Pin, Timer, LED
 
 sensor.reset()
+
 sensor.set_pixformat(sensor.RGB565)
 sensor.set_framesize(sensor.QVGA)
 sensor.skip_frames(time = 2000)
@@ -17,7 +18,7 @@ bus = pyb.I2C(2, pyb.I2C.SLAVE, addr=0x12)
 bus.deinit() # Fully reset I2C device...
 bus = pyb.I2C(2, pyb.I2C.SLAVE, addr=0x12)
 
-thresholds = [(0, 100, -56, -19, -42, -3)] # Either blue or green tape.
+thresholds = [(0, 100, -29, -17, -21, -8)]
 # (0, 100, -128, 44, -128, -31) light off kitchen
 # (0, 100, -128, 127, -128, -13) light on kitchen
 

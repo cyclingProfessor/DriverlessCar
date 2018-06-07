@@ -45,7 +45,8 @@ clock = time.clock()                # Create a clock object to track the FPS.
 
 # Color Tracking Thresholds (L Min, L Max, A Min, A Max, B Min, B Max)
 # thresholds = [(0, 100, -57, -17, -35, 3)] # generic_green band insulation tape - many light conditions
-thresholds = [(0, 100, -56, -19, -42, -3)] # Either blue or green tape.
+# thresholds = [(0, 100, -56, -19, -42, -3)] # Either blue or green tape.
+thresholds = [(0, 100, -29, -17, -21, -8)]
 
 def leds(on_arr):
     for led in range(1,4):
