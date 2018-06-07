@@ -30,7 +30,7 @@ unsigned CameraSensor::getNormalisedValue() {
   if (Wire.available()) {
     value = Wire.read();
   }
-  return value;
+  return (value <= 15) ? value : 7 ;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
