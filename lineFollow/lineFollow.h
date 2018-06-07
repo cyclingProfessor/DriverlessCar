@@ -18,10 +18,8 @@
 #define CLOCK_PIN            2 // digital pin - true-> follow or false-> steer
 #define MOVING_PIN           10 // Am I trying to move?
 
-#define MIN_CAR_SPEED 0u
-#define MAX_CAR_SPEED 100u
-#define FORWARDS 1
-#define BACKWARDS (-FORWARDS)
+#define MIN_CAR_SPEED (-80)
+#define MAX_CAR_SPEED 100
 
 // Number of echo sensors to poll
 #define ECHO_LEFT 0
@@ -32,8 +30,6 @@
 #define MIN_ANGLE 10u //neutral is 65-70 degrees
 #define NEUTRAL_ANGLE 65u
 #define MAX_ANGLE 105u
-#define MIN_CAR_SPEED 0u
-#define MAX_CAR_SPEED 100u
 
 ///////////////////////////////////////////////
 /// State machine constants
@@ -73,20 +69,20 @@
 #define LINE_LENGTH 1
 
 #define MID_POINT ((1 << 3) - 1) // The middle value of a four bit message value.
-#define SPEED_SCALE 100 // speed -100 to 100
+#define SPEED_SCALE 100 // speed -80 to 100
 #define TURN_SCALE 50 // turn -50 to 50
 
 /////////////////////////////
 struct TurnParams {
-  unsigned speedStep1;
-  unsigned speedStep2;
+  int speedStep1;
+  int speedStep2;
   unsigned angleStep1;
   unsigned angleStep2;
 };
 
 struct PID {
-  unsigned Kp ; // 1000 time the proportional constant - default 60
-  unsigned Kd ; // 1000 time the derivative constant - default 
+  int Kp ; // 1000 time the proportional constant - default 60
+  int Kd ; // 1000 time the derivative constant - default 
 };
 
 struct Status {
@@ -94,7 +90,7 @@ struct Status {
   byte state;
   byte saveState; // previous state to return to if necessary
 
-  unsigned desiredSpeed;
+  int desiredSpeed;
   TurnParams turnParams;
   PID lineController; 
 };
@@ -155,7 +151,7 @@ class ProMini {
     const int clockPin;
     const int isMovingPin;
     int dataPins[4];  // truly are const but cannot be initialised as such!
-    byte speed = 0;
+    byte speed = 0;   // Translated speed to a 0-15 scale (7 == stop)
     byte toSpeedByte(int speed);
     byte toTurnByte(int angle);
     void send(byte);
@@ -176,12 +172,12 @@ extern CameraSensor camera;                            // OpenMV camera
 extern ProMini proMini;
 extern Status status;
 
-void processBT(Status &, unsigned count, char **names, unsigned **values);
+void processBT(Status &, unsigned count, char const **names, int **values);
 void threePoint();
 int check_obstacles();
 bool magnetic_strip();
-byte process_rfid(Status *);
-void report(Status &, unsigned count, char **names, unsigned **values);
+void process_rfid(Status *);
+void report(Status &, unsigned count, char const **names, int **values);
 
 #endif
 

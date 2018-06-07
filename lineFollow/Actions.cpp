@@ -12,8 +12,8 @@ bool magnetic_strip() {
 
 //////////////////////////////////////////////////////////
 // We could be at a junction RFID or some other tag
-byte process_rfid(Status *status) {
-  byte *str = rfid.readCardData();
+void process_rfid(Status *status) {
+  char *str = (char *) rfid.readCardData();
   if (!str) {
     return;
   }
@@ -37,9 +37,9 @@ byte process_rfid(Status *status) {
   }
 }
 
-static long reportTime = 0;
+static unsigned long reportTime = 0;
 
-void report(Status &status, unsigned paramCount, char **paramNames, unsigned **paramValues) {
+void report(Status &status, unsigned paramCount, char const **paramNames, int **paramValues) {
   if (millis() < reportTime + 1000) {
     return;
   }
@@ -51,7 +51,7 @@ void report(Status &status, unsigned paramCount, char **paramNames, unsigned **p
   Serial.print("Z" + String(status.state) + ":END:");
   
   Serial.print("P");
-  for (int index = 0 ; index < paramCount ; index++) {
+  for (unsigned index = 0 ; index < paramCount ; index++) {
     Serial.print(paramNames[index] + String(*(paramValues[index])));
   }
   Serial.print(":END:");

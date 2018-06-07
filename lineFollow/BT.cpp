@@ -8,7 +8,7 @@
 #define PARAMS '('
 
 ////////////////////////////////////////////////////////////////////////////
-void processBT(Status &status, unsigned paramCount, char **paramNames, unsigned **paramValues) {
+void processBT(Status &status, unsigned paramCount, char const **paramNames, int **paramValues) {
   if (Serial.available() <= 0) {
     return;
   }
@@ -31,18 +31,18 @@ void processBT(Status &status, unsigned paramCount, char **paramNames, unsigned 
       inByte = Serial.read();
       char name[3];
       name[2] = '\0';
-      unsigned temp;
+      int temp;
       while (inByte != ')') {
         // read next two characters
         name[0] = inByte;
         name[1] = Serial.read();
-        int index;
+        unsigned index;
         for (index = 0 ; index < paramCount ; index++) {
           if (!strncmp(name, paramNames[index], 2))
             break;
         }
         // Ignore unknown parameters.
-        unsigned *currVar = (index < paramCount) ? paramValues[index] : &temp;
+        int *currVar = (index < paramCount) ? paramValues[index] : &temp;
         *currVar = 0;
         inByte = Serial.read();
         while (inByte >= '0' && inByte <= '9') {

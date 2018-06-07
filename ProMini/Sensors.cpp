@@ -32,7 +32,7 @@ static inline unsigned long adj_millis() {
 
 void addToTacho() {
 //  intrCounter++;
-  long t = adj_millis();
+  unsigned long t = adj_millis();
   if (t <= usecTimes[currentSpeedTime] + 2) {// TOO FAST => Bounce
 //    saveT = t;
     return;

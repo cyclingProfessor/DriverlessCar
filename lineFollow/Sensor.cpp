@@ -104,7 +104,7 @@ void EchoMonitor::start(int freq) {
   echo_distances[0] = echo_distances[1] = 1000;
 }
 void EchoMonitor::update() {
-  long duration, distance;
+  long distance;
   if (millis() >= pingTimer) {   // pingSpeed milliseconds since last ping, do another ping.
     pingTimer += pingSpeed;      // Set the next ping time.
     distance = sonar[which_echo].ping_cm(50);

@@ -15,12 +15,12 @@ ProMini proMini(CLOCK_PIN, MOVING_PIN, msg_pins);
 Status status; // global status
 
 const unsigned paramCount = 7;
-char *paramNames[paramCount] = {"s1", "a1", "s2", "a2", "sp", "kp", "kd"};
-unsigned *paramValues[paramCount] = {
+const char *paramNames[paramCount] = {"s1", "a1", "s2", "a2", "sp", "kp", "kd"};
+int *paramValues[paramCount] = {
    &(status.turnParams.speedStep1),
-   &(status.turnParams.angleStep1),
+   (int *) &(status.turnParams.angleStep1), // Allowed type coercion since unsigned turn < 180 
    &(status.turnParams.speedStep2),
-   &(status.turnParams.angleStep2),
+   (int *) &(status.turnParams.angleStep2), // Allowed type coercion since unsigned turn < 180 
    &(status.desiredSpeed),
    &(status.lineController.Kp),
    &(status.lineController.Kd)
