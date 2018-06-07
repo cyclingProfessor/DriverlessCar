@@ -6,7 +6,7 @@ from pyb import Pin, Timer, LED
 sensor.reset()
 
 sensor.set_pixformat(sensor.RGB565)
-sensor.set_framesize(sensor.QVGA)
+sensor.set_framesize(sensor.B128X64)
 sensor.skip_frames(time = 2000)
 sensor.set_auto_gain(False) # must be turned off for color tracking
 sensor.set_auto_whitebal(False) # must be turned off for color tracking
@@ -18,7 +18,8 @@ bus = pyb.I2C(2, pyb.I2C.SLAVE, addr=0x12)
 bus.deinit() # Fully reset I2C device...
 bus = pyb.I2C(2, pyb.I2C.SLAVE, addr=0x12)
 
-thresholds = [(0, 100, -29, -17, -21, -8)]
+thresholds = [(0, 100, -128, 16, -128, -22)]
+#thresholds = [(0, 100, -128, -11, -128, -7)]
 # (0, 100, -128, 44, -128, -31) light off kitchen
 # (0, 100, -128, 127, -128, -13) light on kitchen
 
@@ -46,7 +47,7 @@ def findLine():
     show(current_position) # turns on leds
 
     current_position = -1
-    for blob in img.find_blobs(thresholds, x_stride=3, y_stride=3, pixels_threshold=10, area_threshold=8, roi=(0,100, 320, 20),merge=True, margin=5):
+    for blob in img.find_blobs(thresholds, x_stride=3, y_stride=3, pixels_threshold=10, area_threshold=8, roi=(0,35, 128, 10),merge=True, margin=5):
         img.draw_rectangle(blob.rect())
         img.draw_cross(blob.cx(), blob.cy())
         current_position = blob.cx() * 100 / WIDTH

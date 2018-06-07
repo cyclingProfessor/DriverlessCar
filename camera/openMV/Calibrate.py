@@ -14,8 +14,6 @@ thresholds = [(0, 0, -0, -0, -0, -3)] # Either blue or green tape.
 
 # Go for 100 frames with no fails!
 counter = 0
-a_min = 128
-b_min = 128
 a_max = 0
 b_max = 0
 led_counter = 0
@@ -35,21 +33,19 @@ while(counter < 100):
             if (right - left) < 30 and right - left > 15:
                 #img.draw_rectangle((left, 0, right - left, 10), 0, 4, True)
                 stats = img.get_statistics(roi = (left, 0, right - left, 10))
-                a_min = int((stats.a_lq() + a_min) / 2)
-                b_min = int((stats.b_lq() + b_min) / 2)
                 a_max = int((stats.a_uq() + a_max) / 2)
                 b_max = int((stats.b_uq() + b_max) / 2)
-                thresholds = [(0,100, a_min - 5, a_max + 5, b_min - 5, b_max + 5)]
+                thresholds = [(0,100, -128, a_max + 5, -128, b_max + 5)]
 
                 counter = counter + 1
                 blobs = img.find_blobs(thresholds)
                 for blob in blobs:
                     img.draw_rectangle(blob.rect())
                     img.draw_cross(blob.cx(), blob.cy())
-                if len(blobs) == 1:
-                    counter = 100
             else:
                 counter = 0
+        else:
+            counter = 0
 
 LED(2).on()
 print ("final thresholds")
