@@ -43,7 +43,7 @@ void Controller::correct()
   float differential = delta - lastDelta;
   // If delta (required change) is negative then we go below the neutral level for the actuator.
   // If delta = 10, lastDelta = 20 then we are getting better, so we want to damp down the level.
-  // In this case differential is -10 so can just add a multipl eof this to the level.
+  // In this case differential is -10 so can just add a multiple of this to the level.
 
   int level = neutralLevel + (delta / Kp) + (Kd == 0 ? 0 : (differential / Kd));
   //if (&sensor == &camera)

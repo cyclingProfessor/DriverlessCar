@@ -136,7 +136,7 @@ class SpeedSensor : public Sensor {
 class Controller
 {
   private:
-    int updateInterval;      // interval between updates
+    unsigned long updateInterval;      // interval between updates
     unsigned long lastUpdate; // last update of position
     Transducer &transducer;
     Sensor &sensor;

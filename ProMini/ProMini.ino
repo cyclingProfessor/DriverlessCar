@@ -72,13 +72,13 @@ void loop()
   if (arduino.getData(LINE_MSG, &single)) {
     lineSensor.setValue(single);
     moveState = FOLLOWING;
-//    Serial.print("Got Line Data: "); Serial.println(single);
+    Serial.print("Got Line Data: "); Serial.println(single);
     // Blue light on for first line Data!
-    digitalWrite(LED_BUILTIN, HIGH);    // turn the LED off by making the voltage LOW
+    digitalWrite(LED_BUILTIN, HIGH);
   }
   if (arduino.getData(SPEED_MSG, &single)) {
     setSpeed(single); // Whether or not turning we may change speed.
-//    Serial.print("Got Speed Request: "); Serial.println(single);
+    Serial.print("Got Speed Request: "); Serial.println(single);
   }
   if (arduino.getData(TURN_MSG, turnBuffer)) { // We may need to start a turn
     digitalWrite(MOVING_PIN, HIGH); // Tell the boss we have started.
