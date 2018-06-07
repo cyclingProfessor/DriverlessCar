@@ -24,8 +24,6 @@
 #define MAX_ANGLE 105u
 #define MIN_MOTOR_POWER 0u
 #define MAX_MOTOR_POWER 255u
-#define MIN_CAR_SPEED 0u
-#define MAX_CAR_SPEED 100u
 #define FORWARDS 1
 #define BACKWARDS (-FORWARDS)
 
@@ -187,4 +185,3 @@ extern Motor   motor;   // The h-Bridge motor
 extern Steerer turner;  // Servo for front wheel steering
 extern Message messages[NUM_CODES];
 #endif
-
