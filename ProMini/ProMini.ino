@@ -128,11 +128,12 @@ void setTurn(int where) {
 }
 
 void setSpeed(int speed) {
-  if (speed == 0) {
+  if (speed == 0  || speed == MID_POINT) {
     speedSetter.setActive(false);
     motor.off();
     return;
   }
+  // Check speed and last non-zero speed to see if we need to change the direction signals.
   int nextSpeed = ((speed - MID_POINT) * SPEED_SCALE) / (MID_POINT + 1);
   if (currentSpeed * nextSpeed < 0) {
     speedSensor.restart();
