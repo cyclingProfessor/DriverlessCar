@@ -21,7 +21,9 @@ void processBT(Status &status, unsigned paramCount, char const **paramNames, int
       }
       break;
     case START:
-      status.state = status.saveState;
+      if (status.state == USER_STOPPED) {
+        status.state = status.saveState;
+      }
       break;
     case REPORT:
       report(status, paramCount, paramNames, paramValues);
