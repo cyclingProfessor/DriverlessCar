@@ -70,7 +70,7 @@ void loop()
 {
   //Serial.println(millis());
   EchoMonitor::update();  // Checks ping distance if the time is right
-  //magSensor.update(); // Get the magnetic value under the car.
+  magSensor.update(); // Get the magnetic value under the car.
 
   // These checks are free as they actually do not access sensors.
   if ((check_obstacles() < OBSTACLE_STOP || magnetic_strip()) && !stopped()) {
