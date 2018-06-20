@@ -16,7 +16,9 @@ void processBT(Status &status, unsigned paramCount, char const **paramNames, int
   switch (inByte) {
     case STOP:
       if (status.state != USER_STOPPED) {
-        status.saveState = status.state;
+        if (status.state != OBSTACLE_STOPPED) {
+          status.saveState = status.state;
+        }
         status.state = USER_STOPPED;
       }
       break;
