@@ -51,7 +51,7 @@ void Steerer::start() {
 }
 
 void Steerer::setLevel(unsigned angle) {
-  bound(&angle, NEUTRAL_ANGLE - 18, NEUTRAL_ANGLE + 25);
+  bound(&angle, NEUTRAL_ANGLE - 30, NEUTRAL_ANGLE + 35);
   steer(angle);
 }
 
