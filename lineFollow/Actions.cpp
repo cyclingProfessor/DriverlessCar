@@ -10,6 +10,10 @@ bool magnetic_strip() {
   return magSensor.getNormalisedValue() > MAG_STOP;
 }
 
+void sendInfo(String str) {
+  Serial.print(str);
+  Serial.print(END_MSG);
+}
 //////////////////////////////////////////////////////////
 // We could be at a junction RFID or some other tag
 void process_rfid(Status *status) {
@@ -17,15 +21,16 @@ void process_rfid(Status *status) {
   if (!str) {
     return;
   }
+  strncpy(status->lastTag, str, 16);
   if (!strncmp(str, "Dave", 4)) {
     status->saveState = status->state;
     status->state = USER_STOPPED;
   }
   if (!strncmp(str, "++++",4)) {
-    status->desiredSpeed = min(status->desiredSpeed + 10, 40);
+    status->desiredSpeed = min(status->desiredSpeed + 10, 70);
   }
   if (!strncmp(str, "----",4)) {
-    status->desiredSpeed = max(status->desiredSpeed - 10, 20);
+    status->desiredSpeed = max(status->desiredSpeed - 10, 30);
   }
   if (!strncmp(str, "Stop!", 5)) {
     status->saveState = status->state;
@@ -44,17 +49,17 @@ void report(Status &status, unsigned paramCount, char const **paramNames, int **
     return;
   }
   reportTime = millis();
-  Serial.print("R" + String(status.lastTag) + ":END:");
-  Serial.print("Dleft:" + String(echo_distances[0]) + " right:" + String(echo_distances[1]) + ":END:");
-  Serial.print("M" + String(magSensor.getNormalisedValue()) + ":END:");
-  Serial.print("L" + String(camera.getNormalisedValue()) + ":END:");
-  Serial.print("Z" + String(status.state) + ":END:");
+  sendInfo("R" + String(status.lastTag));
+  sendInfo("Dleft:" + String(echo_distances[0]) + " right:" + String(echo_distances[1]));
+  sendInfo("M" + String(magSensor.getNormalisedValue()));
+  sendInfo("L" + String(camera.getNormalisedValue()));
+  sendInfo("Z" + String(status.state));
   
   Serial.print("P");
   for (unsigned index = 0 ; index < paramCount ; index++) {
     Serial.print(paramNames[index] + String(*(paramValues[index])));
   }
-  Serial.print(":END:");
+  Serial.print(END_MSG);
 }
 
 // Do all of the communication with the Pro Mini
@@ -62,7 +67,7 @@ void ProMini::setStopped() {
   if (speed != 0) {
     speed = 0;
     send(SPEED_MSG);
-    send(speed);
+    send(toSpeedByte(speed));
   }
 }
 
@@ -91,26 +96,30 @@ byte ProMini::toTurnByte(int t) {
 }
 
 void ProMini::setTurn(int which) {
-  Serial.print("#Starting Turn: "); Serial.print(which + 1); Serial.println(" of two.");
+  // Set the last speed to zero since the car stops after turning
+  speed = 0;
+  
   // Always set the data and start a turn
   send(TURN_MSG);
   send(10); // Wait for 30 ms before turning
   if (which == 0) {
-    send(12);
-    send(10);
-    //send(toSpeedByte(status.turnParams.speedStep1));
-    //send(toTurnByte(status.turnParams.turnStep1));
+    send(toSpeedByte(status.turnParams.speedStep1));
+    send(toTurnByte(status.turnParams.angleStep1));
   } else {
-    send(4);
-    send(4);
-    // send(toSpeedByte(status.turnParams.speedStep2));
-    // send(toTurnByte(status.turnParams.turnStep2));
+    send(toSpeedByte(-1 * status.turnParams.speedStep2));
+    send(toTurnByte(status.turnParams.angleStep2));
   }
-  send(12);
-  delay(1000);
+  send(15); // Distance to move.
+  // Wait for the move to begin. Never wait too long.
+  int count = 0;
+  while (digitalRead(isMovingPin) != HIGH && count < 20) {
+     delay(50);
+     count++;
+  }
 }
 
 bool ProMini::getMoveEnded() {
+  // Check the isMovingPin which is set low by the ProMini after the move finishes.
   return digitalRead(isMovingPin) == LOW;
 }
 
@@ -131,7 +140,7 @@ void ProMini::start() {
 }
 
 void ProMini::send(byte b) {
-  delay(4);
+  delayMicroseconds(300); // Give time for previous ISR on the ProMini to finish.
   for (int index = 0 ; index < 4 ; index++) {
     digitalWrite(dataPins[index], (b & (1 << index)) > 0 ? HIGH : LOW);
   }

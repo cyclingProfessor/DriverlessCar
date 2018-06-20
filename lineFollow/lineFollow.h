@@ -27,9 +27,9 @@
 #define MAX_DISTANCE 50
 
 // Parameters for turn settings.
-#define MIN_ANGLE 10u //neutral is 65-70 degrees
-#define NEUTRAL_ANGLE 65u
-#define MAX_ANGLE 105u
+#define MIN_ANGLE 10 //neutral is 65-70 degrees
+#define NEUTRAL_ANGLE 65
+#define MAX_ANGLE 105
 
 ///////////////////////////////////////////////
 /// State machine constants
@@ -40,6 +40,10 @@
 #define THREEPOINT 3
 #define THREEPOINT_ONE 4
 #define THREEPOINT_FINISH 5
+////////////////////////////////////////////
+// Constants for commnicating with the Android (Serial port) App
+//
+#define END_MSG ":END:"
 
 ////////////////////////////////////////////
 // Constants for message passing
@@ -178,6 +182,7 @@ int check_obstacles();
 bool magnetic_strip();
 void process_rfid(Status *);
 void report(Status &, unsigned count, char const **names, int **values);
+void sendInfo(String);
 
 #endif
 

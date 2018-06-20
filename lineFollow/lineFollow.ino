@@ -31,18 +31,18 @@ void setup()
   Serial.begin(115200);
 
   while (!Serial);    // Do nothing if no serial port is opened
-  Serial.println("#Comms established.");
+  sendInfo("#Comms established.");
 
   Wire.begin(); // Begins comms to I2C devices.
-  Serial.println("#Wire (I2C) started.");
+  sendInfo("#Wire (I2C) started.");
   rfid.start();
-  Serial.println("#RFID Sensor started.");
+  sendInfo("#RFID Sensor started.");
   magSensor.start();
-  Serial.println("#Mag Sensor started.");
+  sendInfo("#Mag Sensor started.");
   EchoMonitor::start(250);
-  Serial.println("#Ping Sensors started.");
+  sendInfo("#Ping Sensors started.");
 
-  status.desiredSpeed = (MAX_CAR_SPEED - MIN_CAR_SPEED) / 2;
+  status.desiredSpeed = (MAX_CAR_SPEED - MIN_CAR_SPEED) / 4;
   proMini.start();
   proMini.setStopped();
 
@@ -50,13 +50,19 @@ void setup()
   status.state = USER_STOPPED;
   status.saveState = FOLLOWING; // The state to move to after we finish being stopped
   strncpy(status.lastTag, "NONE YET", 16);
-  Serial.println("#Watching the world, awaiting your commands.");
+  // Set some reasonable defaults.
+  status.turnParams.angleStep1 = 30;
+  status.turnParams.angleStep2 = 95;
+  status.turnParams.speedStep1 = 45;
+  status.turnParams.speedStep2 = 40;
+  
+  sendInfo("#Watching the world, awaiting your commands.");
 }
 
-#define OBSTACLE_STOP 20  // see something at this distance and stop
-#define OBSTACLE_START 30 // wait until its this far away to start
+#define OBSTACLE_STOP 30  // see something at this distance and stop
+#define OBSTACLE_START 40 // wait until its this far away to start
 
-boolean stopped() {
+static inline boolean stopped() {
   return status.state == OBSTACLE_STOPPED || status.state == USER_STOPPED;
 }
 
@@ -64,7 +70,7 @@ void loop()
 {
   //Serial.println(millis());
   EchoMonitor::update();  // Checks ping distance if the time is right
-  magSensor.update(); // Get the magnetic value under the car.
+  //magSensor.update(); // Get the magnetic value under the car.
 
   // These checks are free as they actually do not access sensors.
   if ((check_obstacles() < OBSTACLE_STOP || magnetic_strip()) && !stopped()) {
@@ -116,7 +122,7 @@ void loop()
       camera.calibrate();
       break;
     default:
-      Serial.println("Oops - WTF!");
+      sendInfo("#Oops - WTF!");
       break;
   }
 }
