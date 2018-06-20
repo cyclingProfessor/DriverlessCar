@@ -25,7 +25,7 @@ LineSensor lineSensor;  // Pseudo sensor that corresponds to byte in data[]
 Arduino arduino;      // Object that manages comms, including the ISR stuff
 
 Controller speedSetter(speedSensor, motor, MIN_MOTOR_POWER, SPEED_UPDATE, 0.1f, 1000.0f);
-Controller lineFollower(lineSensor, turner, NEUTRAL_ANGLE, LINE_UPDATE, -0.6f, 1000.0f);
+Controller lineFollower(lineSensor, turner, NEUTRAL_ANGLE, LINE_UPDATE, -0.75f, 1000.0f);
 
 void setup()
 {
@@ -81,8 +81,8 @@ void loop()
     Serial.print("Got Speed Request: "); Serial.println(single);
   }
   if (arduino.getData(TURN_MSG, turnBuffer)) { // We may need to start a turn
-    digitalWrite(MOVING_PIN, HIGH); // Tell the boss we have started.
-    setSpeed(0);
+    digitalWrite(MOVING_PIN, HIGH); // Tell the boss we have started a turn.
+    setSpeed(MID_POINT);  // Stopped!
     startTime = millis();
     moveState = WAIT_TURN; // Now the turn will start....
     Serial.print("Got Turn Request: ");
@@ -108,9 +108,9 @@ void loop()
       break;
     case IN_TURN:
 //      Serial.print(tacho); Serial.print(" = tacho Compared to "); Serial.println(startTacho + 5 * turnBuffer[3]);
-      if (tacho > startTacho + 5 * turnBuffer[3]) {
+      if (tacho > startTacho + 8 * turnBuffer[3]) {
         Serial.println("Turn Ended");
-        setSpeed(0);
+        setSpeed(MID_POINT);
         digitalWrite(MOVING_PIN, LOW); // Tell the boss we have finished.
         moveState = FOLLOWING;
       }
@@ -128,18 +128,20 @@ void setTurn(int where) {
 }
 
 void setSpeed(int speed) {
-  if (speed == 0  || speed == MID_POINT) {
+  int nextSpeed = ((speed - MID_POINT) * SPEED_SCALE) / (MID_POINT + 1);
+  currentSpeed = nextSpeed;
+
+  if (nextSpeed == 0) {
     speedSetter.setActive(false);
     motor.off();
     return;
   }
-  // Check speed and last non-zero speed to see if we need to change the direction signals.
-  int nextSpeed = ((speed - MID_POINT) * SPEED_SCALE) / (MID_POINT + 1);
-  if (currentSpeed * nextSpeed < 0) {
-    speedSensor.restart();
-    motor.setDirection(currentSpeed < 0 ? FORWARDS : BACKWARDS);
+  if (nextSpeed > 0) {
+    motor.setDirection(FORWARDS);
+    speedSetter.setDesiredValue(currentSpeed);
+  } else {
+    motor.setDirection(BACKWARDS);
+    speedSetter.setDesiredValue(-currentSpeed);
   }
-  currentSpeed = nextSpeed;
-  speedSetter.setDesiredValue(currentSpeed > 0 ? currentSpeed : -currentSpeed);
   speedSetter.setActive(true);
 }
