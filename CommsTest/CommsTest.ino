@@ -41,7 +41,28 @@ void send(byte b) {
   digitalWrite(CLOCK_PIN, HIGH);    
 }
 
+////////////////////////////////////////////////////////////////////
+//calculates inverse of: ((byte - MID_POINT) * SPEED_SCALE) / (MID_POINT + 1);
+// since this is what is done on the Pro Mini
+byte toSpeedByte(int s) {
+  return (s * (7 + 1) / 100) + 7;
+}
+
+////////////////////////////////////////////////////////////////////
+//calculates inverse of: NEUTRAL_ANGLE + (((byte - MID_POINT) * TURN_SCALE) / (MID_POINT + 1));
+// since this is what is done on the Pro Mini
+byte toTurnByte(int t) {
+  return (t - 65) * (7 + 1) / 50 + 7;
+}
+
+
 void loop() {
+  int speed1;
+  int angle1;
+  int speed2;
+  int angle2;
+  int distance;
+  
   if (Serial.available() > 0) {
     int inByte = Serial.read();
 
@@ -68,30 +89,38 @@ void loop() {
         Serial.println("Sent a FORWARDS message.");
         break;
       case 'T':
+        //Serial.println("Type in \"Speed1 Angle1 -Speed2 Angle2 Dist\" for a test three point turn)";
+        speed1 = Serial.parseInt();
+        angle1 = Serial.parseInt();
+        speed2 = Serial.parseInt();
+        angle2 = Serial.parseInt();
+        distance = Serial.parseInt();
+        Serial.print("Speed 1: "); Serial.print(speed1); Serial.print(" : "); Serial.println(toSpeedByte(speed1));
+        Serial.print("Angle 1: "); Serial.print(angle1); Serial.print(" : "); Serial.println(toTurnByte(angle1));
+        Serial.print("Speed 2: "); Serial.print(speed2); Serial.print(" : "); Serial.println(toSpeedByte(speed2));
+        Serial.print("Angle 2: "); Serial.print(angle2); Serial.print(" : "); Serial.println(toTurnByte(angle2));
         Serial.print("Moving PIN before: "); Serial.println(digitalRead(MOVING_PIN));
         send(TURN_MSG);
-        // Send four parameters from status - as a test send four values of 10:
-        // 10 * 4 == 40 ms delay
-        // 10 speed -> (10-7) * 50 / 7 = 20
-        // 10 turn -> quite hard turn.
-        // 10 * 5 = 50 clicks running -> 2.5 revolutions = 40cm
+        // Send four parameters from status:
+        // 10 => 40 ms delay
+        // speed1
+        // turn1
+        // 10 => 2.5 revolutions = 40cm
         send(10); //wait a bit
-        send(12); // quite fast
-        send(10); // turn one way
-        send(12); // quite a long movement
+        send(toSpeedByte(speed1));
+        send(toTurnByte(angle1));
+        send(distance); // quite a long movement
         Serial.print("Moving PIN after: "); Serial.println(digitalRead(MOVING_PIN));
-        // Now wait for the MOVING_PIN to go low! With a cheeky timeout
-        unsigned long start;
-        start = millis();
+
         Serial.println("Sent a TURN message.");
 
         Serial.println("Now wait for first move To End");
         while (digitalRead(MOVING_PIN) != HIGH) {
-          Serial.println("Moving PIN Low");
+          //Serial.println("Moving PIN Low");
           delay(50);
         }
         while (digitalRead(MOVING_PIN) != LOW) {
-          Serial.println("Moving PIN High");
+          //Serial.println("Moving PIN High");
           delay(50);
         }
         Serial.println("That's it then");
@@ -99,13 +128,11 @@ void loop() {
         delay(200);
         send(TURN_MSG);
         send(10); //wait a bit
-        send(4); // quite fast backwards
-        send(4); // turn the other way
-        send(12); // quite a long movement
+        send(toSpeedByte(-1 * speed2));
+        send(toTurnByte(angle2));
+        send(distance); // quite a long movement
         Serial.println("Sent a TURN message.");
 
-        // Now wait for the MOVING_PIN to go low! With a cheeky timeout
-        start = millis();
         Serial.println("Now wait for Moving To End");
         while (digitalRead(MOVING_PIN) != HIGH) {}
         while (digitalRead(MOVING_PIN) != LOW) {}
