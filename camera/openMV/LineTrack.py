@@ -1,12 +1,14 @@
 # Send line data to the Arduino for line tracking.
-import sensor, image, time
+import sensor, image, time, lcd
 import pyb, ustruct
 from pyb import Pin, Timer, LED
 
 sensor.reset()
+lcd.init() # Initialize the lcd screen.
 
 sensor.set_pixformat(sensor.RGB565)
-sensor.set_framesize(sensor.B128X64)
+sensor.set_framesize(sensor.QQVGA2) # Special 128x160 framesize for LCD Shield.
+
 sensor.skip_frames(time = 2000)
 sensor.set_auto_gain(False) # must be turned off for color tracking
 sensor.set_auto_whitebal(False) # must be turned off for color tracking
@@ -18,7 +20,7 @@ bus = pyb.I2C(2, pyb.I2C.SLAVE, addr=0x12)
 bus.deinit() # Fully reset I2C device...
 bus = pyb.I2C(2, pyb.I2C.SLAVE, addr=0x12)
 
-thresholds = [(0, 100, -128, 16, -128, -22)]
+thresholds = [(0, 100, -128, -14, -128, -4)]
 #thresholds = [(0, 100, -128, -11, -128, -7)]
 # (0, 100, -128, 44, -128, -31) light off kitchen
 # (0, 100, -128, 127, -128, -13) light on kitchen
@@ -47,11 +49,12 @@ def findLine():
     show(current_position) # turns on leds
 
     current_position = -1
-    for blob in img.find_blobs(thresholds, x_stride=3, y_stride=3, pixels_threshold=10, area_threshold=8, roi=(0,35, 128, 10),merge=True, margin=5):
+    for blob in img.find_blobs(thresholds, x_stride=3, y_stride=3, pixels_threshold=10, area_threshold=8, roi=(0,85, 128, 20),merge=True, margin=5):
         img.draw_rectangle(blob.rect())
         img.draw_cross(blob.cx(), blob.cy())
         current_position = blob.cx() * 100 / WIDTH
     show(current_position) # turns on leds
+    lcd.display(img)
 
     print(current_position)
 
