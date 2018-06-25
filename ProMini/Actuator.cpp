@@ -22,6 +22,8 @@ Motor::Motor(int p1, int p2, int c) : dirPin1(p1), dirPin2(p2), ctrlPin(c) {
   this->off();
 }
 void Motor::off() {
+  digitalWrite(dirPin2, LOW); // Both LOW is fast stop
+  digitalWrite(dirPin1, LOW);
   analogWrite(ctrlPin, 0);
 }
 
