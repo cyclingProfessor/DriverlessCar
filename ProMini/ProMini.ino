@@ -9,10 +9,6 @@ Message messages[NUM_CODES] = {
 };
 
 /////////////// Configuration values ////////////////////////////////////////////////
-// Time in milliseconds between control loops
-#define LINE_UPDATE 30
-#define SPEED_UPDATE 9
-
 ////////////// GLOBAL STATE ///////////////////////////////////////////////////////
 volatile unsigned tacho = 0;                      // Count of tacho clicks
 int currentSpeed = 0;                             // Global desired speed.
@@ -29,7 +25,7 @@ Controller lineFollower(lineSensor, turner, NEUTRAL_ANGLE, LINE_UPDATE, -0.75f, 
 
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(BAUD_RATE);
   while (!Serial);    // Do nothing if no serial port is opened
 
   speedSensor.start();
@@ -37,7 +33,7 @@ void setup()
   motor.setDirection(FORWARDS);
   motor.off();
   turner.steer(NEUTRAL_ANGLE);
-  lineFollower.setDesiredValue(50);
+  lineFollower.setDesiredValue(LINE_DESIRED);
   Serial.println("Starting Pro Mini");
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
@@ -46,15 +42,11 @@ void setup()
 //  Serial.print("Tacho is now: "); Serial.println(tacho);
 }
 
-#define FOLLOWING 101
-#define IN_TURN 103
-#define WAIT_TURN 105
-
 unsigned long startTime; // Used to stay in one state for a while.
 unsigned startTacho; //Used to stay in one state for a certain distance moved.
 int moveState = FOLLOWING; // FOLLOWING or TURNING of some kind
 
-byte turnBuffer[4]; // Maximum length of any data transfer
+byte turnBuffer[MAX_MESSAGE_LENGTH]; // Maximum length of any data transfer
 byte single; // Used to (temporarily) hold single bytes read from Arduino
 
 /////////////// Debug Variables ////////////
@@ -122,13 +114,19 @@ void loop()
 
 void setTurn(int where) {
   Serial.print("Unconverted angle: "); Serial.println(where);
-  int angle = NEUTRAL_ANGLE + (((where - MID_POINT) * (int)TURN_SCALE) / (MID_POINT + 1));
+  int angle = nibbleToTurn(where);
   Serial.print("Turning to angle: "); Serial.println(angle);
   turner.steer(angle);
 }
 
+// TODO: Really want to actively break if the speed is too fast.
+// At present for going forwards we can only switch the motor off
+// This will be just excellent for nice stopping.
+// This will move the logic for zero speed to the specific controller.
+// Unfortunately without quadrature encoding we doe not "know" whether we are currently moving
+//     moving forwards of backwards - but of course we do.
 void setSpeed(int speed) {
-  int nextSpeed = ((speed - MID_POINT) * SPEED_SCALE) / (MID_POINT + 1);
+  int nextSpeed = nibbleToSpeed(speed);
   currentSpeed = nextSpeed;
 
   if (nextSpeed == 0) {

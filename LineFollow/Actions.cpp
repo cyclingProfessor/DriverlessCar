@@ -1,6 +1,4 @@
-#include "lineFollow.h"
-
-#define MAG_STOP 40
+#include "LineFollow.h"
 
 int check_obstacles() {
   return min(echo_distances[0], echo_distances[1]);
@@ -16,21 +14,18 @@ void sendInfo(String str) {
 }
 //////////////////////////////////////////////////////////
 // We could be at a junction RFID or some other tag
+static const int SPEED_DELTA = 10;
 void process_rfid(Status *status) {
   char *str = (char *) rfid.readCardData();
   if (!str) {
     return;
   }
   strncpy(status->lastTag, str, 16);
-  if (!strncmp(str, "Dave", 4)) {
-    status->saveState = status->state;
-    status->state = USER_STOPPED;
-  }
   if (!strncmp(str, "++++",4)) {
-    status->desiredSpeed = min(status->desiredSpeed + 10, 70);
+    status->desiredSpeed = min(status->desiredSpeed + SPEED_DELTA, MAX_CAR_SPEED);
   }
   if (!strncmp(str, "----",4)) {
-    status->desiredSpeed = max(status->desiredSpeed - 10, 30);
+    status->desiredSpeed = max(status->desiredSpeed - SPEED_DELTA, MIN_EFFECTIVE_SPEED);
   }
   if (!strncmp(str, "Stop!", 5)) {
     status->saveState = status->state;
@@ -49,13 +44,13 @@ void report(Status &status, unsigned paramCount, char const **paramNames, int **
     return;
   }
   reportTime = millis();
-  sendInfo("R" + String(status.lastTag));
-  sendInfo("Dleft:" + String(echo_distances[0]) + " right:" + String(echo_distances[1]));
-  sendInfo("M" + String(magSensor.getNormalisedValue()));
-  sendInfo("L" + String(camera.getNormalisedValue()));
-  sendInfo("Z" + String(status.state));
+  sendInfo(RFID_TAG_CODE + String(status.lastTag));
+  sendInfo(SONAR_CODE + String("left:") + String(echo_distances[0]) + " right:" + String(echo_distances[1]));
+  sendInfo(MAGNET_CODE + String(magSensor.getNormalisedValue()));
+  sendInfo(LINE_CODE + String(camera.getNormalisedValue()));
+  sendInfo(STATUS_CODE + String(status.state));
   
-  Serial.print("P");
+  Serial.print(PARAMETERS_CODE);
   for (unsigned index = 0 ; index < paramCount ; index++) {
     Serial.print(paramNames[index] + String(*(paramValues[index])));
   }
@@ -67,7 +62,7 @@ void ProMini::setStopped() {
   if (speed != 0) {
     speed = 0;
     send(SPEED_MSG);
-    send(toSpeedByte(speed));
+    send(toSpeedNibble(speed));
   }
 }
 
@@ -77,22 +72,8 @@ void ProMini::setFollowing() {
   if (speed != status.desiredSpeed) {
     speed = status.desiredSpeed;
     send(SPEED_MSG);
-    send(toSpeedByte(speed)); //always positive
+    send(toSpeedNibble(speed)); //always positive
   }
-}
-
-////////////////////////////////////////////////////////////////////
-//calculates inverse of: ((byte - MID_POINT) * SPEED_SCALE) / (MID_POINT + 1);
-// since this is what is done on the Pro Mini
-byte ProMini::toSpeedByte(int s) {
-  return (s * (MID_POINT + 1) / SPEED_SCALE) + MID_POINT;
-}
-
-////////////////////////////////////////////////////////////////////
-//calculates inverse of: NEUTRAL_ANGLE + (((byte - MID_POINT) * TURN_SCALE) / (MID_POINT + 1));
-// since this is what is done on the Pro Mini
-byte ProMini::toTurnByte(int t) {
-  return (t - NEUTRAL_ANGLE) * (MID_POINT + 1) / TURN_SCALE + MID_POINT;
 }
 
 void ProMini::setTurn(int which) {
@@ -101,15 +82,15 @@ void ProMini::setTurn(int which) {
   
   // Always set the data and start a turn
   send(TURN_MSG);
-  send(10); // Wait for 30 ms before turning
+  send(PRE_TURN_WAIT); // Wait for 30 ms before turning
   if (which == 0) {
-    send(toSpeedByte(status.turnParams.speedStep1));
-    send(toTurnByte(status.turnParams.angleStep1));
+    send(toSpeedNibble(status.turnParams.speedStep1));
+    send(toTurnNibble(status.turnParams.angleStep1));
   } else {
-    send(toSpeedByte(-1 * status.turnParams.speedStep2));
-    send(toTurnByte(status.turnParams.angleStep2));
+    send(toSpeedNibble(-1 * status.turnParams.speedStep2));
+    send(toTurnNibble(status.turnParams.angleStep2));
   }
-  send(15); // Distance to move.
+  send(TURN_TACHO); // Distance to move.
   // Wait for the move to begin. Never wait too long.
   int count = 0;
   while (digitalRead(isMovingPin) != HIGH && count < 20) {
@@ -123,10 +104,10 @@ bool ProMini::getMoveEnded() {
   return digitalRead(isMovingPin) == LOW;
 }
 
-ProMini::ProMini(int clock, int isMoving, int pins[4]): clockPin(clock), isMovingPin(isMoving){
+ProMini::ProMini(int clock, int isMoving, int pins[NUM_BITS_PER_MESSAGE]): clockPin(clock), isMovingPin(isMoving){
   pinMode(clockPin, OUTPUT);
   pinMode(isMovingPin, INPUT);
-  for (int index = 0 ; index < 4 ; index++) {
+  for (int index = 0 ; index < NUM_BITS_PER_MESSAGE ; index++) {
     dataPins[index] = pins[index];
     pinMode(dataPins[index], OUTPUT);
   }
@@ -134,14 +115,14 @@ ProMini::ProMini(int clock, int isMoving, int pins[4]): clockPin(clock), isMovin
 
 void ProMini::start() {
   // Send registration codes
-  for (int index = 0 ; index < 6 ; index++) {
-    send((7 * index + 3) & 0xF);
+  for (int index = 0 ; index < REG_CODE_COUNT ; index++) {
+    send(reg_code(index));
   }  
 }
 
 void ProMini::send(byte b) {
   delayMicroseconds(300); // Give time for previous ISR on the ProMini to finish.
-  for (int index = 0 ; index < 4 ; index++) {
+  for (int index = 0 ; index < NUM_BITS_PER_MESSAGE ; index++) {
     digitalWrite(dataPins[index], (b & (1 << index)) > 0 ? HIGH : LOW);
   }
   digitalWrite(clockPin, LOW);

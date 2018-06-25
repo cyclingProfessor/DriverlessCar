@@ -5,31 +5,14 @@
 #include <Wire.h>
 #include <LIS3MDL.h>
 #include <NewPing.h>
+#include <CarLib.h>
 
-// PIN Settings
-// SPI MOSI and MISO are pins 11 and 12, 13 cannot be used.
-#define RFID_RST_PIN         4
-#define RFID_SS_PIN          5
-#define TRIGGER_PIN_LEFT     7  // Arduino pin tied to trigger pin on ping sensor.
-#define ECHO_PIN_LEFT        3  // Arduino pin tied to echo pin on ping sensor.
-#define TRIGGER_PIN_RIGHT    6  // Arduino pin tied to trigger pin on ping sensor.
-#define ECHO_PIN_RIGHT       9  // Arduino pin tied to echo pin on ping sensor.
-#define CAMERA_PIN           8 // Arduino pin tied to control pin on OpenMV camera
-#define CLOCK_PIN            2 // digital pin - true-> follow or false-> steer
-#define MOVING_PIN           10 // Am I trying to move?
-
-#define MIN_CAR_SPEED (-80)
-#define MAX_CAR_SPEED 100
-
-// Number of echo sensors to poll
-#define ECHO_LEFT 0
-#define ECHO_RIGHT 1
+// Echo and Magnet sensors
 #define MAX_DISTANCE 50
-
-// Parameters for turn settings.
-#define MIN_ANGLE 10 //neutral is 65-70 degrees
-#define NEUTRAL_ANGLE 65
-#define MAX_ANGLE 105
+#define NO_OBJECT 1000
+#define OBSTACLE_STOP 30  // see something at this distance and stop
+#define OBSTACLE_START 40 // wait until its this far away to start
+#define MAG_STOP 40  // Stop when this is the magnetism!
 
 ///////////////////////////////////////////////
 /// State machine constants
@@ -41,40 +24,6 @@
 #define THREEPOINT_ONE 4
 #define THREEPOINT_FINISH 5
 ////////////////////////////////////////////
-// Constants for commnicating with the Android (Serial port) App
-//
-#define END_MSG ":END:"
-
-////////////////////////////////////////////
-// Constants for message passing
-// Uses one digital output pin: MOVING_PIN
-// Other pins are all used for input - clocked in from the pins A0-A3
-// Hence we interrupt on CLOCK_PIN Rising.
-// Message: Type followed by....
-//     1-> next ONE byte is desired speed.
-//     2-> next ONE bytes are line value.
-//     3-> next FOUR bytes are Kd, Kp
-//     4-> next FOUR bytes are Wait Time, Angle, Speed, Duration
-/////////////////////////////////////////////////////////////////////////
-// Each data set is followed by a ready flag.
-// Main should only read the data when the ready flag (freshness indicator) is set.
-#define NUM_CODES 4 // How many message types
-
-#define SPEED_MSG 7
-#define SPEED_LENGTH 1
-
-#define PID_MSG 9
-#define PID_LENGTH 4
-
-#define TURN_MSG 11
-#define TURN_LENGTH 4
-
-#define LINE_MSG 13
-#define LINE_LENGTH 1
-
-#define MID_POINT ((1 << 3) - 1) // The middle value of a four bit message value.
-#define SPEED_SCALE 100 // speed -80 to 100
-#define TURN_SCALE 50 // turn -50 to 50
 
 /////////////////////////////
 struct TurnParams {
@@ -89,8 +38,9 @@ struct PID {
   int Kd ; // 1000 time the derivative constant - default 
 };
 
+#define MAX_TAG_LENGTH 16
 struct Status {
-  char lastTag[16];
+  char lastTag[MAX_TAG_LENGTH];
   byte state;
   byte saveState; // previous state to return to if necessary
 
@@ -156,8 +106,6 @@ class ProMini {
     const int isMovingPin;
     int dataPins[4];  // truly are const but cannot be initialised as such!
     byte speed = 0;   // Translated speed to a 0-15 scale (7 == stop)
-    byte toSpeedByte(int speed);
-    byte toTurnByte(int angle);
     void send(byte);
   public:
     void start();
@@ -185,4 +133,3 @@ void report(Status &, unsigned count, char const **names, int **values);
 void sendInfo(String);
 
 #endif
-

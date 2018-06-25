@@ -2,60 +2,20 @@
 #define PRO_MINI
 #include <Arduino.h>
 #include <Servo.h>  // servo library
+#include <CarLib.h>
 
-// PIN Settings
-#define DIR_PIN1             7 // Motor direction pin
-#define DIR_PIN2             6 // Motor direction pin
-#define SPEED_PIN            5 // Needs to be a PWM pin to be able to control motor speed
-#define STEER_PIN            9
-#define SPEED_SENSOR_INTR    3 // Interrupt raised by slotted speed sensor - tacho + speed.
-#define CLOCK_PIN            2 // (Intr) digital pin to initiate parallel xfer
-#define MOVING_PIN           8 // Am I trying to move?
-#define DATA_0               A4
-#define DATA_1               A5
-#define DATA_2               A6
-#define DATA_3               A7
-
-// Useful Physical Constants
-#define MAX_SERVO 1798
-#define MIN_SERVO 771
-#define MIN_ANGLE 10u //neutral is 65-70 degrees
-#define NEUTRAL_ANGLE 65u
-#define MAX_ANGLE 105u
-#define MIN_MOTOR_POWER 0u
-#define MAX_MOTOR_POWER 255u
 #define FORWARDS 1
 #define BACKWARDS (-FORWARDS)
 
-// Constants for message passing
-// Uses one digital output pin: MOVING_PIN
-// Other pins are all used for input - clocked in from the pins A0-A3
-// Hence we interrupt on CLOCK_PIN Rising.
-// Message: Type followed by....
-//     1-> next ONE byte is desired speed.
-//     2-> next ONE bytes are line value.
-//     3-> next FOUR bytes are Kd, Kp
-//     4-> next FOUR bytes are Wait Time, Angle, Speed, Duration
-/////////////////////////////////////////////////////////////////////////
-// Each data set is followed by a ready flag.
-// Main should only read the data when the ready flag (freshness indicator) is set.
-#define NUM_CODES 4 // How many message types
+#define FOLLOWING 101
+#define IN_TURN 103
+#define WAIT_TURN 105
 
-#define SPEED_MSG 7
-#define SPEED_LENGTH 1
+// Time in milliseconds between control loops
+#define LINE_UPDATE 30
+#define SPEED_UPDATE 9
 
-#define PID_MSG 9
-#define PID_LENGTH 4
-
-#define TURN_MSG 11
-#define TURN_LENGTH 4
-
-#define LINE_MSG 13
-#define LINE_LENGTH 1
-
-#define MID_POINT ((1 << 3) - 1) // The middle value of a four bit message value.
-#define SPEED_SCALE 100 // speed -100 to 100
-#define TURN_SCALE (MAX_ANGLE - MIN_ANGLE) // turn -50 to 50
+#define LINE_DESIRED 50
 
 // Constants for a base 2 circular buffer - TIME_AVERAGE must be a power of two
 #define TIME_AVERAGE (1 << 3)  // How many spot times we use to get current speed

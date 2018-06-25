@@ -15,8 +15,8 @@ void Arduino::start() {
   digitalWrite(MOVING_PIN, LOW); // Tell the boss we are not moving.
 
   buildData();
-  for (int index = 0 ; index < 6 ; index++) {
-    registerCode[index] = (7 * index + 3) & 0xF;
+  for (int index = 0 ; index < REG_CODE_COUNT ; index++) {
+    registerCode[index] = reg_code(index);
   }
   attachInterrupt (digitalPinToInterrupt (CLOCK_PIN), clockPinIsr, RISING);
 }
@@ -38,6 +38,7 @@ void Arduino::buildData() {
 }
 
 ////////////////////////////////////
+// Since DATA_3 and DATA_4 cannot be digital we use analog levels
 byte Arduino::readPins() {
   byte value = 0;
   if (analogRead(DATA_3) > 500) {

@@ -1,4 +1,4 @@
-#include "lineFollow.h"
+#include "LineFollow.h"
 
 //////////////////////////////////////////////////////////////////////////////////////
 CameraSensor::CameraSensor(int pin): controlPin(pin) {
@@ -25,12 +25,12 @@ unsigned CameraSensor::getNormalisedValue() {
 	if (!watching) {
 		return 0; // This should never happen
 	}
-  byte value = 7;
-  Wire.requestFrom(0x12, 1);
+  byte value = MID_POINT;
+  Wire.requestFrom(CAMERA_ADDR, 1);
   if (Wire.available()) {
     value = Wire.read();
   }
-  return (value <= 15) ? value : 7 ;
+  return (value <= MAX_MESSAGE) ? value : MID_POINT ;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -101,17 +101,17 @@ void EchoMonitor::start(int freq) {
   pinMode(ECHO_PIN_RIGHT, INPUT);
   pingSpeed = freq;
   pingTimer = millis();
-  echo_distances[0] = echo_distances[1] = 1000;
+  echo_distances[0] = echo_distances[1] = NO_OBJECT;
 }
 void EchoMonitor::update() {
   long distance;
   if (millis() >= pingTimer) {   // pingSpeed milliseconds since last ping, do another ping.
     pingTimer += pingSpeed;      // Set the next ping time.
-    distance = sonar[which_echo].ping_cm(50);
+    distance = sonar[which_echo].ping_cm(MAX_DISTANCE);
     if (distance > 0) {
       echo_distances[which_echo] = distance; 
     } else {
-      echo_distances[which_echo] = 1000; 
+      echo_distances[which_echo] = NO_OBJECT; 
     }
     which_echo = 1 - which_echo;
   }

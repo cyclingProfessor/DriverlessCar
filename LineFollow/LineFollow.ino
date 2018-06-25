@@ -1,6 +1,4 @@
-#include "lineFollow.h"
-
-/////////////// Configuration values ////////////////////////////////////////////////
+#include "LineFollow.h"
 
 ////////////// GLOBAL STATE ///////////////////////////////////////////////////////
 int echo_distances[2];
@@ -9,13 +7,13 @@ int echo_distances[2];
 RFID    rfid;                                   // The RFID reader
 MagSensor magSensor;                            // The magnetic sensor
 CameraSensor camera(CAMERA_PIN);                // The OpenMV camera
-static int msg_pins[] = {A0,A1,A2,A3};
-ProMini proMini(CLOCK_PIN, MOVING_PIN, msg_pins);
+int MESSAGE_PINS[] = {MSG_PIN0,MSG_PIN1,MSG_PIN2,MSG_PIN3};
+ProMini proMini(CLOCK_PIN, MOVING_PIN, MESSAGE_PINS);
 
 Status status; // global status
 
-const unsigned paramCount = 7;
-const char *paramNames[paramCount] = {"s1", "a1", "s2", "a2", "sp", "kp", "kd"};
+const char *paramNames[] = {SPEED1, ANGLE1, SPEED2, ANGLE2, BASE_SPEED, PROP_K, DERIV_K};
+const unsigned paramCount = sizeof(paramNames) / sizeof(paramNames[0]);
 int *paramValues[paramCount] = {
    &(status.turnParams.speedStep1),
    (int *) &(status.turnParams.angleStep1), // Allowed type coercion since unsigned turn < 180 
@@ -28,7 +26,7 @@ int *paramValues[paramCount] = {
 
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(BAUD_RATE);
 
   while (!Serial);    // Do nothing if no serial port is opened
   sendInfo("#Comms established.");
@@ -49,18 +47,15 @@ void setup()
   // In the beginning we wait for a BT start command
   status.state = USER_STOPPED;
   status.saveState = FOLLOWING; // The state to move to after we finish being stopped
-  strncpy(status.lastTag, "NONE YET", 16);
+  strncpy(status.lastTag, "NONE YET", MAX_TAG_LENGTH);
   // Set some reasonable defaults.
-  status.turnParams.angleStep1 = 30;
-  status.turnParams.angleStep2 = 95;
-  status.turnParams.speedStep1 = 45;
-  status.turnParams.speedStep2 = 40;
+  status.turnParams.angleStep1 = ANGLE1_DEF;
+  status.turnParams.angleStep2 = ANGLE2_DEF;
+  status.turnParams.speedStep1 = SPEED1_DEF;
+  status.turnParams.speedStep2 = SPEED2_DEF;
   
   sendInfo("#Watching the world, awaiting your commands.");
 }
-
-#define OBSTACLE_STOP 30  // see something at this distance and stop
-#define OBSTACLE_START 40 // wait until its this far away to start
 
 static inline boolean stopped() {
   return status.state == OBSTACLE_STOPPED || status.state == USER_STOPPED;

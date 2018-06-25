@@ -1,11 +1,4 @@
-#include "lineFollow.h"
-
-///////////////////////////////////////////////
-/// BT constants
-#define REPORT '?'
-#define START 'F'
-#define STOP 'S'
-#define PARAMS '('
+#include "LineFollow.h"
 
 ////////////////////////////////////////////////////////////////////////////
 void processBT(Status &status, unsigned paramCount, char const **paramNames, int **paramValues) {
@@ -36,7 +29,7 @@ void processBT(Status &status, unsigned paramCount, char const **paramNames, int
       char name[3];
       name[2] = '\0';
       int temp;
-      while (inByte != ')') {
+      while (inByte != END_PARAM) {
         // read next two characters
         name[0] = inByte;
         name[1] = Serial.read();
