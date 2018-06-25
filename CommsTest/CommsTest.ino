@@ -1,25 +1,10 @@
-#include "Arduino.h"
+#include "CarLib.h"
 
-#define SPEED_MSG 7
-#define SPEED_LENGTH 1
-
-#define PID_MSG 9
-#define PID_LENGTH 4
-
-#define TURN_MSG 11
-#define TURN_LENGTH 4
-
-#define LINE_MSG 13
-#define LINE_LENGTH 1
-
-#define CLOCK_PIN            2 
-#define MOVING_PIN           10
-
-int pins[] = {A0, A1, A2, A3};
-const char *HELP = "Type R:Register, S:stop, F:Forwards, B:Backwards, T:Turn";
+int pins[] = {MSG_PIN0, MSG_PIN1, MSG_PIN2, MSG_PIN3};
+const char *HELP = "Type R:Register, S:stop, F:Forwards, B:Backwards, T sp1 ang1 sp2 ang2 dist:3-pointTurn";
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(BAUD_RATE);
   while (!Serial);    // Do nothing if no serial port is opened
     pinMode(MOVING_PIN, INPUT);
   for (int index = 0 ; index < 4 ; index++) {
@@ -41,21 +26,6 @@ void send(byte b) {
   digitalWrite(CLOCK_PIN, HIGH);    
 }
 
-////////////////////////////////////////////////////////////////////
-//calculates inverse of: ((byte - MID_POINT) * SPEED_SCALE) / (MID_POINT + 1);
-// since this is what is done on the Pro Mini
-byte toSpeedByte(int s) {
-  return (s * (7 + 1) / 100) + 7;
-}
-
-////////////////////////////////////////////////////////////////////
-//calculates inverse of: NEUTRAL_ANGLE + (((byte - MID_POINT) * TURN_SCALE) / (MID_POINT + 1));
-// since this is what is done on the Pro Mini
-byte toTurnByte(int t) {
-  return (t - 65) * (7 + 1) / 50 + 7;
-}
-
-
 void loop() {
   int speed1;
   int angle1;
@@ -69,23 +39,23 @@ void loop() {
     switch (inByte) {
       case 'R':
         for (int index = 0 ; index < 6 ; index++) {
-          send((7 * index + 3) & 0xF);
+          send(reg_code(index));
         }
         Serial.println("Sent registration codes.");
         break;
       case 'S':
         send(SPEED_MSG);
-        send(0);
+        send(toSpeedNibble(0));
         Serial.println("Sent a STOP message.");
         break;
       case 'B':
         send(SPEED_MSG);
-        send(4);
+        send(toSpeedNibble(-40));
         Serial.println("Sent a BACKWARDS message.");
         break;
       case 'F':
         send(SPEED_MSG);
-        send(10);
+        send(toSpeedNibble(50));
         Serial.println("Sent a FORWARDS message.");
         break;
       case 'T':
@@ -95,10 +65,10 @@ void loop() {
         speed2 = Serial.parseInt();
         angle2 = Serial.parseInt();
         distance = Serial.parseInt();
-        Serial.print("Speed 1: "); Serial.print(speed1); Serial.print(" : "); Serial.println(toSpeedByte(speed1));
-        Serial.print("Angle 1: "); Serial.print(angle1); Serial.print(" : "); Serial.println(toTurnByte(angle1));
-        Serial.print("Speed 2: "); Serial.print(speed2); Serial.print(" : "); Serial.println(toSpeedByte(speed2));
-        Serial.print("Angle 2: "); Serial.print(angle2); Serial.print(" : "); Serial.println(toTurnByte(angle2));
+        Serial.print("Speed 1: "); Serial.print(speed1); Serial.print(" : "); Serial.println(toSpeedNibble(speed1));
+        Serial.print("Angle 1: "); Serial.print(angle1); Serial.print(" : "); Serial.println(toTurnNibble(angle1));
+        Serial.print("Speed 2: "); Serial.print(speed2); Serial.print(" : "); Serial.println(toSpeedNibble(speed2));
+        Serial.print("Angle 2: "); Serial.print(angle2); Serial.print(" : "); Serial.println(toTurnNibble(angle2));
         Serial.print("Moving PIN before: "); Serial.println(digitalRead(MOVING_PIN));
         send(TURN_MSG);
         // Send four parameters from status:
@@ -107,8 +77,8 @@ void loop() {
         // turn1
         // 10 => 2.5 revolutions = 40cm
         send(10); //wait a bit
-        send(toSpeedByte(speed1));
-        send(toTurnByte(angle1));
+        send(toSpeedNibble(speed1));
+        send(toTurnNibble(angle1));
         send(distance); // quite a long movement
         Serial.print("Moving PIN after: "); Serial.println(digitalRead(MOVING_PIN));
 
@@ -128,8 +98,8 @@ void loop() {
         delay(200);
         send(TURN_MSG);
         send(10); //wait a bit
-        send(toSpeedByte(-1 * speed2));
-        send(toTurnByte(angle2));
+        send(toSpeedNibble(-1 * speed2));
+        send(toTurnNibble(angle2));
         send(distance); // quite a long movement
         Serial.println("Sent a TURN message.");
 
