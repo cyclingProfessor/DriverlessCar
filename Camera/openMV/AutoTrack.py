@@ -5,9 +5,8 @@
 #    LOW - enable interupts and calibrate
 #
 #####################################################################################################
-# Calibrate: Flashes at CALIBRATE_FLASH milliseconds rate (BLUE) led until calibrated then (BLUE) led permanent
+# Calibrate: Flashes at CALIBRATE_FLASH milliseconds rate (BLUE) led until calibrated then ((YELLOW)) led permanent
 #
-# Nothing implemented yet!
 #
 #####################################################################################################
 # Direction: It uses a [LED] heartbeat to show that it is working - RED, WHITE, GREEN - but only image
@@ -16,11 +15,10 @@
 #
 # Each loop:
 #     Either: Switch on light (showing direction)
-#     Or: Switch off light and send centre of blob of correct colour (0-100).
+#     Or: Switch off light and send centre of blob of correct colour (0-15).
 
-import sensor, image, time, lcd
-import pyb, ustruct
-from pyb import Pin, Timer, LED
+import sensor, image, time, lcd, ustruct
+from pyb import Pin, Timer, LED, delay, I2C
 
 CALIBRATE_FLASH = 40 # flash speed while calibrating
 REPORT_TIME = 0 # time between sending direction updates
@@ -34,21 +32,17 @@ sensor.set_framesize(sensor.QQVGA2) # Special 128x160 framesize for LCD Shield.
 sensor.skip_frames(time = 2000)
 sensor.set_auto_gain(False) # must be turned off for color tracking
 sensor.set_auto_whitebal(False) # must be turned off for color tracking
+current_position = -1 # I am LOST
 
 WIDTH = sensor.width()
 
 # There are 3 possible errors for i2c.send: timeout(116), general purpose(5) or busy(16) for err.arg[0]
-bus = pyb.I2C(2, pyb.I2C.SLAVE, addr=0x12)
+bus = I2C(2, I2C.SLAVE, addr=0x12)
 bus.deinit() # Fully reset I2C device...
-bus = pyb.I2C(2, pyb.I2C.SLAVE, addr=0x12)
+bus = I2C(2, I2C.SLAVE, addr=0x12)
 
 activePin = Pin('P9', Pin.IN, Pin.PULL_DOWN)
 clock = time.clock()                # Create a clock object to track the FPS.
-
-# Color Tracking Thresholds (L Min, L Max, A Min, A Max, B Min, B Max)
-# thresholds = [(0, 100, -57, -17, -35, 3)] # generic_green band insulation tape - many light conditions
-# thresholds = [(0, 100, -56, -19, -42, -3)] # Either blue or green tape.
-thresholds = [(0, 100, -128, -14, -128, -4)]
 
 def leds(on_arr):
     for led in range(1,4):
@@ -67,13 +61,30 @@ def show(posn): # passed normalised value from 0 to 100 (or less than 0 for NONE
     else: # GREEN
         leds((False, True, False))
 
-# We need to think about calibration - later
-def calibrate(): # if not calibrated then swithces leds on for one call, off for the next.  Otherwise turns them on.
-    sensor.snapshot()
-    leds((False, False, True))
+def calibrate(threshold):
+    retval = False
+    img = sensor.snapshot()
+    img.draw_rectangle(0,80, 128, 30)
+    lines = [l for l in img.find_line_segments(roi=(4,85, 120, 20), merge_distance=4) if l.theta() > 150 or l.theta() < 30]
+    for line in lines:
+        img.draw_line(line.line())
+    if len(lines) == 2:
+        left = min(lines[0].x1(), lines[1].x1())
+        right = max(lines[0].x1(), lines[1].x1())
+        if (right - left) < 30 and right - left > 15:
+            stats = img.get_statistics(roi = (left + 5, 85, right - left - 5, 105))
+            threshold[3] = int((stats.a_uq() + threshold[3]) / 2)
+            threshold[5] = int((stats.b_uq() + threshold[5]) / 2)
 
-current_position = -1 # I am LOST
-def sendData():
+            blobs = img.find_blobs([threshold], x_stride=3, y_stride=3, pixels_threshold=10, area_threshold=8, roi=(0,85, 128, 20),merge=True, margin=5)
+            if len(blobs) == 1:
+                retval = True
+                img.draw_rectangle(blobs[0].rect(), fill=True, color=(255,0,0))
+                pass
+    lcd.display(img)
+    return retval
+
+def sendData(threshold):
     global current_position
     clock.tick()
     img = sensor.snapshot()
@@ -81,7 +92,7 @@ def sendData():
 
     save_position = current_position
     current_position = -1
-    for blob in img.find_blobs(thresholds, x_stride=3, y_stride=3, pixels_threshold=10, area_threshold=8, roi=(0,85, 128, 20),merge=True, margin=5):
+    for blob in img.find_blobs([threshold], x_stride=3, y_stride=3, pixels_threshold=10, area_threshold=8, roi=(0,85, 128, 20),merge=True, margin=5):
         img.draw_rectangle(blob.rect())
         img.draw_cross(blob.cx(), blob.cy())
         current_position = int(save_position * LAMBDA + blob.cx() * 15 / WIDTH * (1 - LAMBDA))
@@ -98,11 +109,29 @@ def sendData():
 #############################################################################################
 # MAIN LOOP
 ###############################################################################################
-while(True):
-    # Here we either calibrate each time around the loop, or we do direction processing.
-    while activePin.value():
-        sendData()
 
+# Here we either calibrate each time around the loop, or we do direction processing.
+while True:
+    show_led = False
+    counter = 0
+    # Color Tracking Thresholds (L Min, L Max, A Min, A Max, B Min, B Max)
+    threshold = [0,100, -128, 0, -128, 0]
     while not activePin.value():
-        calibrate(); # flash light until calibrated.
-        time.sleep(CALIBRATE_FLASH)
+        # flash gold or blue depending on whether we are calibrated
+        if counter > 20: # we are calibrated
+            leds((True, True, False))
+        else:
+            leds((False, False, show_led))
+            if (not show_led):
+                if calibrate(threshold):
+                    counter = counter + 1
+                else:
+                    counter = 0
+        show_led = not show_led
+        delay(CALIBRATE_FLASH)
+
+    # be nice to the line finder
+    threshold[3] += 10
+    threshold[5] += 10
+    while activePin.value():
+        sendData(threshold)
