@@ -7,6 +7,11 @@ const char *ssid = "ESPcarAP";
 const char *password = "thisisnotaspoon";
 WiFiClient client;
 
+/***********************************************************************************************************\
+* See https://docs.google.com/spreadsheets/d/1bhfsjG0d4l3q6j9Bx6Ja7MYPekk8pvvGrTb8yf0j5cc/edit?usp=sharing
+* for details on ESP8266 pinout and its relationship to D1 Mini
+\***********************************************************************************************************/
+
 //Keyboard Controls:
 //
 // + -Motor more forwards
@@ -21,59 +26,67 @@ WiFiClient client;
 // Declare L298N Dual H-Bridge Motor Controller directly since there is not a library to load.
 // Change to using Pololo TB6612FNG Mosfet controller
 
-// Motor 1
-int dir1PinA = D5;
-int dir2PinA = D6;
-int speedPinA = D2; // Needs to be a PWM pin to be able to control motor speed
-int enablePin = D3; // Enable Motor control
-int steerPin = D8;
-int servoPower = D0;
+/////////////////////////////////////// Pin Assignments /////////////////////////
+int dir1Pin = D3; // => to TB6612FNG Pin INA1
+int dir2Pin = D4; // => to TB6612FNG Pin INA2
+int speedPin = D5; // => to TB6612FNG Pin PWMA (Needs to be a PWM pin to be able to control motor speed)
+int steerPin = D6; // => Servo Control Wire (Orange) (Needs to be a PWM pin to be able to control servo angle)
+int servoMotorPower = D8; // => Mosfet Board Signal, TB6612FNG STDY (Needs to start LOW (which is very rare on ESP8266))
+int quadPinYellow = D1; // Needs Interupt
+int quadPinGreen = D2; // Needs Interupt
 
+///////////////////////////// Tunable constants /////////////////////////////////
+const int speedList[] = {-1000, -800, -600, -400, 0, +400, +600, +800, +1000};
+const int speedSize = sizeof(speedList) / sizeof(speedList[0]);
+const int stopIndex = 4;
+int speedIndex = stopIndex;
+
+const int NEUTRAL_ANGLE = 90;
+int angle = NEUTRAL_ANGLE;
+
+/////////////////// Hardware considerations ////////////////////////////
 const int MAX_SERVO = 2000;
 const int MIN_SERVO = 1000;
-const int MIN_ANGLE = 10; //neutral is 55 degrees
-const int NEUTRAL_ANGLE = 90;
-const int MAX_ANGLE = 105;
+const int GLITCH = 40;  // How much to overturn to compensate for hysteresis
+const int DELAY= 45; // How long to wait for a trun to complete.
+unsigned long waitTime;
+bool turnBack = false;
 
+////////////////////// Speed and position calculations //////////////////
 volatile int speedEstimate = 0;
 volatile int lastPosition = 0;
 volatile unsigned long lastTime = 0L;
 int diffP = 0;
 int diffT = 0;
-const int speedList[] = {-1000, -800, -600, -400, 0, +400, +600, +800, +1000};
-const int speedSize = sizeof(speedList) / sizeof(speedList[0]);
-const int stopIndex = 4;
-int speedIndex = stopIndex;
-int angle = NEUTRAL_ANGLE;
-unsigned long waitTime;
-bool turnBack = false;
-const int GLITCH = 40;  // How much to overturn to compensate for hysteresis
-const int DELAY= 45; // How long to wait for a trun to complete.
 
-Encoder enc(D1,D7);
+//////////////////////////////// Objects ////////////////////////////
+Encoder enc(quadPinYellow,quadPinGreen);
 Ticker speedSetter;
 WiFiServer server(3000);
-Servo   servo;                               // servo control object
+Servo   servo;
 
+///////////////////////////////// CODE //////////////////////////////////////////
 void setup() {  // Setup runs once per reset
-  pinMode(servoPower, OUTPUT);
-  digitalWrite(servoPower, LOW);
+  delay(1000);  // Wait for pins to settle.
   pinMode(steerPin, OUTPUT);
   servo.attach(steerPin, MIN_SERVO, MAX_SERVO);
   servo.write(angle);
+  delay(10);  // Wait for servo ctrl pin to settle.
+  
+  pinMode(servoMotorPower, OUTPUT);
+  digitalWrite(servoMotorPower, HIGH);
 
-  delay(1000);
   //Define TB6612FNG Dual H-Bridge Motor Controller Pins
-  pinMode(dir1PinA, OUTPUT);  
-  pinMode(dir2PinA, OUTPUT);
-  pinMode(speedPinA, OUTPUT);
-  pinMode(enablePin, OUTPUT);
-  digitalWrite(enablePin, HIGH);
-  digitalWrite(servoPower, HIGH);
+  pinMode(dir1Pin, OUTPUT);  
+  pinMode(dir2Pin, OUTPUT);
+  pinMode(speedPin, OUTPUT);
+  analogWrite(speedPin, 0);//Sets speed variable via PWM
+  digitalWrite(dir1Pin, HIGH);
+  digitalWrite(dir2Pin, HIGH);      
   
   speedSetter.attach_ms(10, setSpeed);
 
-  int retID = WiFi.softAP(ssid, password);             // Start the access point
+  int retID = WiFi.softAP(ssid, password);
   IPAddress myIP = WiFi.softAPIP();
   server.begin();
 }
@@ -160,16 +173,16 @@ void loop() {
       break;
   }
   if (speedList[speedIndex] > 0) {
-    analogWrite(speedPinA, speedList[speedIndex]);//Sets speed variable via PWM
-    digitalWrite(dir1PinA, LOW);
-    digitalWrite(dir2PinA, HIGH);
+    analogWrite(speedPin, speedList[speedIndex]);//Sets speed variable via PWM
+    digitalWrite(dir1Pin, LOW);
+    digitalWrite(dir2Pin, HIGH);
   } else if (speedList[speedIndex] < 0) {
-    analogWrite(speedPinA, -1 * speedList[speedIndex]);//Sets speed variable via PWM
-    digitalWrite(dir1PinA, HIGH);
-    digitalWrite(dir2PinA, LOW);
+    analogWrite(speedPin, -1 * speedList[speedIndex]);//Sets speed variable via PWM
+    digitalWrite(dir1Pin, HIGH);
+    digitalWrite(dir2Pin, LOW);
   } else {
-    analogWrite(speedPinA, 0);//Sets speed variable via PWM
-    digitalWrite(dir1PinA, HIGH);
-    digitalWrite(dir2PinA, HIGH);      
+    analogWrite(speedPin, 0);//Sets speed variable via PWM
+    digitalWrite(dir1Pin, HIGH);
+    digitalWrite(dir2Pin, HIGH);      
   }
 }
