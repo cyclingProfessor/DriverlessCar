@@ -3,6 +3,7 @@
 #include <ESP8266WiFi.h>
 #include "Servo.h"
 
+const char *Version = "Motor/Servo Controller V1.0"; 
 const char *ssid = "ESPcarAP";
 const char *password = "thisisnotaspoon";
 WiFiClient client;
@@ -22,6 +23,15 @@ WiFiClient client;
 // R - Turn Servo to Right
 // C - Centre servo
 //
+
+const char *HELP = "H/? - This help meassage\n"
+ "+ -Motor more forwards\n"
+ "- -Motor more backwards\n"
+ "0 -Motor stop\n"
+ "s - print stats\n"
+ "L - trun servo to Left\n"
+ "R - Turn Servo to Right\n"
+ "C - Centre servo\n";
 
 // Declare L298N Dual H-Bridge Motor Controller directly since there is not a library to load.
 // Change to using Pololo TB6612FNG Mosfet controller
@@ -67,6 +77,8 @@ Servo   servo;
 
 ///////////////////////////////// CODE //////////////////////////////////////////
 void setup() {  // Setup runs once per reset
+  Serial.begin(115200);
+  Serial.println(Version);
   delay(1000);  // Wait for pins to settle.
   pinMode(steerPin, OUTPUT);
   servo.attach(steerPin, MIN_SERVO, MAX_SERVO);
@@ -126,7 +138,14 @@ void loop() {
     }
   }
 
-  switch (inByte) {
+  switch (toupper(inByte)) {
+    case 'H':
+    case '?':
+      client.println(Version);
+      client.println(HELP);
+      client.flush();
+      break;
+      
     case '+': // Motor 1 Forward
       speedIndex = min(speedIndex + 1, speedSize);
       break;
@@ -155,7 +174,6 @@ void loop() {
       turnBack = true;
       break;
     case 'S':
-    case 's':
       client.print("diffT: ");
       client.println(diffT);
       client.print("DiffP: ");
