@@ -6,7 +6,7 @@
 const char *Version = "Motor/Servo Controller V1.0"; 
 const char *ssid = "ESPcarAP";
 const char *password = "thisisnotaspoon";
-WiFiClient client;
+int usingWiFi = false;
 
 /***********************************************************************************************************\
 * See https://docs.google.com/spreadsheets/d/1bhfsjG0d4l3q6j9Bx6Ja7MYPekk8pvvGrTb8yf0j5cc/edit?usp=sharing
@@ -23,6 +23,7 @@ WiFiClient client;
 // R - Turn Servo to Right
 // C - Centre servo
 //
+// Since this is run by the Wemos D1 Lite it can read from either Serial, or fron the Wifi
 
 const char *HELP = "H/? - This help meassage\n"
  "+ -Motor more forwards\n"
@@ -31,9 +32,9 @@ const char *HELP = "H/? - This help meassage\n"
  "s - print stats\n"
  "L - trun servo to Left\n"
  "R - Turn Servo to Right\n"
- "C - Centre servo\n";
+ "C - Centre servo\n"
+ "W - Toggle WiFi Access Point\n";
 
-// Declare L298N Dual H-Bridge Motor Controller directly since there is not a library to load.
 // Change to using Pololo TB6612FNG Mosfet controller
 
 /////////////////////////////////////// Pin Assignments /////////////////////////
@@ -63,7 +64,9 @@ unsigned long waitTime;
 bool turnBack = false;
 
 ////////////////////// Speed and position calculations //////////////////
-volatile int speedEstimate = 0;
+volatile int spCalcOfffset = 0;
+volatile int speedEstimate[4]; // Average over 4 readngs.
+volatile int currentSpeed = 0;
 volatile int lastPosition = 0;
 volatile unsigned long lastTime = 0L;
 int diffP = 0;
@@ -73,13 +76,14 @@ int diffT = 0;
 Encoder enc(quadPinYellow,quadPinGreen);
 Ticker speedSetter;
 WiFiServer server(3000);
+WiFiClient client;
 Servo   servo;
 
 ///////////////////////////////// CODE //////////////////////////////////////////
 void setup() {  // Setup runs once per reset
+  delay(1000);  // Wait for pins to settle.
   Serial.begin(115200);
   Serial.println(Version);
-  delay(1000);  // Wait for pins to settle.
   pinMode(steerPin, OUTPUT);
   servo.attach(steerPin, MIN_SERVO, MAX_SERVO);
   servo.write(angle);
@@ -97,10 +101,6 @@ void setup() {  // Setup runs once per reset
   digitalWrite(dir2Pin, HIGH);      
   
   speedSetter.attach_ms(10, setSpeed);
-
-  int retID = WiFi.softAP(ssid, password);
-  IPAddress myIP = WiFi.softAPIP();
-  server.begin();
 }
 
 void setSpeed() {
@@ -110,27 +110,79 @@ void setSpeed() {
     // update speed estimate
     diffP = position - lastPosition;
     diffT = time - lastTime;
-    speedEstimate = 10000L * diffP / diffT;
+    // Circular buffer the speed estimate.
+    
+    // spCalcOfffset points to last entered speed - so remove this from total.
+    currentSpeed -= speedEstimate[spCalcOfffset];
+    
+    // Put in new guess
+    speedEstimate[spCalcOfffset] = 10000L * diffP / diffT;
+    currentSpeed += speedEstimate[spCalcOfffset];
+    
+    spCalcOfffset = (spCalcOfffset + 1) & 3;
   }
   lastTime = time;
   lastPosition = position;
 }
 
-void loop() {
-  int inByte = 0;
-  if (!client || !client.connected()) {
-    client = server.available();
-  }
-  if (client) {
-    if (client.connected()) {
-      if (client.available() > 0) {
-        inByte = client.read();
-      }
-    } else {
+void toggleWiFi() {
+  usingWiFi = ! usingWiFi;
+  if (usingWiFi) {
+    WiFi.softAP(ssid, password);
+//      IPAddress myIP = WiFi.softAPIP();
+    server.begin();
+  } else {
+    if (client) {
       client.stop();
+    }
+    server.stop();
+    WiFi.softAPdisconnect(true); 
+  }
+}
+
+int getByte() {
+  if (usingWiFi) { // Is the WiFi server running?
+    if (!client || !client.connected()) { // Does it NOT a current client?
+      client = server.available(); // Get a WifFi client.
+    }
+    if (client) { // Do we have a current WiFi client?
+      if (client.connected()) {
+        if (client.available() > 0) {
+          return(client.read()); // Return point here for reading a WiFi 
+        }
+      } else { // Client has died - kill out WiFiClient object.
+        client.stop();
+      }
     }
   }
 
+  // Here we have not managed to read from Wifi: try Serial
+  if (Serial.available()) {
+    return Serial.read();
+  }
+  return 0;  // Do nothing!
+}
+
+void report(Stream &out) {
+  out.print("EstimatedSPeed: ");
+  out.println(currentSpeed);
+  out.print("Encoder Value");
+  out.println(enc.read());
+  out.print("Desired Speed (index): ");
+  out.println(speedList[speedIndex]);
+  out.flush();
+}
+
+void help(Stream & out) {
+  out.print(Version);
+  out.print(HELP);
+  out.flush();
+}
+
+
+void loop() {
+  int inByte = getByte();
+  
   if (turnBack) {
     if (millis() > waitTime + DELAY) {
       turnBack = false;
@@ -139,11 +191,13 @@ void loop() {
   }
 
   switch (toupper(inByte)) {
+    case 'W':
+      toggleWiFi();
+      break;
     case 'H':
     case '?':
-      client.println(Version);
-      client.println(HELP);
-      client.flush();
+      if (usingWiFi) help(client);
+       help(Serial);
       break;
       
     case '+': // Motor 1 Forward
@@ -174,18 +228,8 @@ void loop() {
       turnBack = true;
       break;
     case 'S':
-      client.print("diffT: ");
-      client.println(diffT);
-      client.print("DiffP: ");
-      client.println(diffP);
-      client.print("EstimatedSPeed: ");
-      client.println(speedEstimate);
-      client.println("   "); // Creates a blank line printed on the client monitor         
-      client.print("Encoder Value");
-      client.println(enc.read());
-      client.print("Speed: ");
-      client.println(speedList[speedIndex]);
-      client.flush();
+      if (usingWiFi) report(client);
+        report(Serial);
       break;
     default:
       break;
