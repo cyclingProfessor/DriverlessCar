@@ -1,8 +1,10 @@
 #include <SPI.h>
 #include <MFRC522.h>
 
-constexpr uint8_t RST_PIN = 4;     // Configurable, see typical pin layout above
-constexpr uint8_t SS_PIN = 5;     // Configurable, see typical pin layout above
+constexpr uint8_t RST_PIN = 9;     // Configurable, see typical pin layout above
+constexpr uint8_t SS_PIN = 10;     // Configurable, see typical pin layout above
+
+HardwareSerial &Serial = Serial1;
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance.
 
@@ -78,4 +80,3 @@ void dump_byte_array(byte *buffer, byte bufferSize) {
     Serial.print(string);
   }
 }
-
