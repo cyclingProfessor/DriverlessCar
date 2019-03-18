@@ -116,7 +116,7 @@ void setSpeed() {
     currentSpeed -= speedEstimate[spCalcOfffset];
     
     // Put in new guess
-    speedEstimate[spCalcOfffset] = 10000L * diffP / diffT;
+    speedEstimate[spCalcOfffset] = (10000L * diffP) / diffT;
     currentSpeed += speedEstimate[spCalcOfffset];
     
     spCalcOfffset = (spCalcOfffset + 1) & 3;
@@ -166,10 +166,12 @@ int getByte() {
 void report(Stream &out) {
   out.print("EstimatedSPeed: ");
   out.println(currentSpeed);
-  out.print("Encoder Value");
+  out.print("Encoder Value: ");
   out.println(enc.read());
   out.print("Desired Speed (index): ");
   out.println(speedList[speedIndex]);
+  out.print(digitalRead(quadPinYellow));
+  out.print(digitalRead(quadPinGreen));
   out.flush();
 }
 
@@ -231,17 +233,25 @@ void loop() {
       if (usingWiFi) report(client);
         report(Serial);
       break;
+    case 'F':
+      // Blockage in front
+      speedIndex = min(speedIndex, stopIndex);
+      break;
+    case 'B':
+      // Blockage behind
+      speedIndex = max(speedIndex, stopIndex);
+      break;
     default:
       break;
   }
   if (speedList[speedIndex] > 0) {
     analogWrite(speedPin, speedList[speedIndex]);//Sets speed variable via PWM
-    digitalWrite(dir1Pin, LOW);
-    digitalWrite(dir2Pin, HIGH);
-  } else if (speedList[speedIndex] < 0) {
-    analogWrite(speedPin, -1 * speedList[speedIndex]);//Sets speed variable via PWM
     digitalWrite(dir1Pin, HIGH);
     digitalWrite(dir2Pin, LOW);
+  } else if (speedList[speedIndex] < 0) {
+    analogWrite(speedPin, -1 * speedList[speedIndex]);//Sets speed variable via PWM
+    digitalWrite(dir1Pin, LOW);
+    digitalWrite(dir2Pin, HIGH);
   } else {
     analogWrite(speedPin, 0);//Sets speed variable via PWM
     digitalWrite(dir1Pin, HIGH);
