@@ -1,3 +1,4 @@
+#include <timerobj.h>
 #include <SPI.h>
 #include <MFRC522.h>
 
@@ -12,11 +13,12 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);
 byte buffer[2 * BLOCKS + 2];
 #define VAL_OFFSET 6
 
-MFRC522::MIFARE_Key key;
-
 volatile boolean bNewInt = false;
 volatile boolean foundCard = false;
 unsigned char regVal;
+
+void readCard();
+//Timer triggerTimer(50, readCard, t_period, NULL );
 
 void setup() {
   Serial1.begin(115200); // Initialize serial communications with the PC
@@ -26,18 +28,19 @@ void setup() {
   mfrc522.PCD_Init();
 
   /* setup the IRQ pin*/
-  pinMode(IRQ_PIN, INPUT_PULLDOWN);
+  pinMode(IRQ_PIN, INPUT_PULLUP);
 
   /*
       Allow the ... irq to be propagated to the IRQ pin
       For test purposes propagate the IdleIrq and loAlert
   */
-  int regVal = 0x20; //rx irq
-  mfrc522.PCD_WriteRegister(mfrc522.ComIEnReg, regVal);
+  mfrc522.PCD_WriteRegister(mfrc522.ComIEnReg, 0x20);
+  mfrc522.PCD_WriteRegister(mfrc522.DivIEnReg, 0x90);
 
   /*Activate the interrupt*/
   attachInterrupt(IRQ_PIN, readCard, RISING);
-
+  activateRec(mfrc522);
+  delay(100);
   Serial1.println("End setup");
 }
 
@@ -46,6 +49,7 @@ void setup() {
 */
 void loop() {
 
+  //readCard();
   if (bNewInt) { //new read interrupt
     bNewInt = false;
     Serial.print("Interrupt.");
@@ -56,18 +60,11 @@ void loop() {
       Serial.print(">");
     }
     Serial.println();
-    clearInt(mfrc522);
     foundCard = false;
-  } else {
-    Serial1.println("NOTHING");
   }
 
-  // The receiving block needs regular retriggering (tell the tag it should transmit??)
-  // (mfrc522.PCD_WriteRegister(mfrc522.FIFODataReg,mfrc522.PICC_CMD_REQA);)
-  activateRec(mfrc522);
-  Serial.println("Beginning to Wait");
-  delay(10000);
-
+  Serial.println("Beginning to Wait for a Card.");
+  delay(4000);
 } //loop()
 
 /**
@@ -91,6 +88,7 @@ void readCard() {
   mfrc522.PICC_ReadCardSerial(); //read the tag data
   if (!readCardData())
     return;
+  activateRec(mfrc522);
   foundCard = true;
 }
 
