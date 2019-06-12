@@ -5,6 +5,7 @@ constexpr uint8_t RST_PIN = 9;     // Configurable, see typical pin layout above
 constexpr uint8_t SS_PIN = 10;     // Configurable, see typical pin layout above
 
 HardwareSerial &Serial = Serial1;
+unsigned long currentID = 0L;
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance.
 
@@ -12,7 +13,7 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance.
    Initialize.
 */
 void setup() {
-  Serial.begin(115200); // Initialize serial communications with the PC
+  Serial1.begin(115200); // Initialize serial communications with the PC
   while (!Serial);    // Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
   SPI.begin();        // Init SPI bus
   mfrc522.PCD_Init(); // Init MFRC522 card
@@ -22,6 +23,9 @@ void setup() {
    Main loop.
 */
 void loop() {
+  Serial1.println("Present tag now to RFID Reader - I am starting to wait.");
+  delay(2000);
+
   // Look for new cards
   if ( ! mfrc522.PICC_IsNewCardPresent())
     return;
@@ -30,6 +34,13 @@ void loop() {
   if ( ! mfrc522.PICC_ReadCardSerial())
     return;
 
+  unsigned long nextID = getID();
+  if (nextID == currentID) {
+    return ;
+  }
+
+  currentID = nextID;
+   
   // Show some details of the PICC (that is: the tag/card)
   //Serial.print(F("Card UID:"));
   //dump_byte_array(mfrc522.uid.uidByte, mfrc522.uid.size);
@@ -69,6 +80,14 @@ char *readCardData() {
   return buffer + VAL_OFFSET;
 }
 
+unsigned long getID(){
+  unsigned long hex_num;
+  hex_num =  mfrc522.uid.uidByte[0] << 24;
+  hex_num += mfrc522.uid.uidByte[1] << 16;
+  hex_num += mfrc522.uid.uidByte[2] <<  8;
+  hex_num += mfrc522.uid.uidByte[3];
+  return hex_num;
+}
 
 /**
    Helper routine to dump a byte array as hex values to Serial.
