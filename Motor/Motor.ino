@@ -47,10 +47,8 @@ int quadPinYellow = D1; // Needs Interupt
 int quadPinGreen = D2; // Needs Interupt
 
 ///////////////////////////// Tunable constants /////////////////////////////////
-const int speedList[] = {-1000, -800, -600, -400, 0, +400, +600, +800, +1000};
-const int speedSize = sizeof(speedList) / sizeof(speedList[0]);
-const int stopIndex = 4;
-int speedIndex = stopIndex;
+#define SPEED_STEP 10
+int desiredSpeed = 0;
 
 const int NEUTRAL_ANGLE = 90;
 int angle = NEUTRAL_ANGLE;
@@ -59,7 +57,7 @@ int angle = NEUTRAL_ANGLE;
 const int MAX_SERVO = 2000;
 const int MIN_SERVO = 1000;
 const int GLITCH = 40;  // How much to overturn to compensate for hysteresis
-const int DELAY= 45; // How long to wait for a trun to complete.
+const int DELAY= 45; // How long to wait for a turn to complete.
 unsigned long waitTime;
 bool turnBack = false;
 
@@ -104,11 +102,15 @@ void setup() {  // Setup runs once per reset
 }
 
 void setSpeed() {
+  static int counter = 0;
+  static int motorPower = 0;
+  static const int startPower = 300;
+  
   unsigned long time = micros(); // Remember to check for overflow.
   int position = enc.read();
   if (time > lastTime) {
     // update speed estimate
-    diffP = position - lastPosition;
+    diffP = lastPosition - position;
     diffT = time - lastTime;
     // Circular buffer the speed estimate.
     
@@ -123,6 +125,32 @@ void setSpeed() {
   }
   lastTime = time;
   lastPosition = position;
+
+  // Now set speed itself! Only every ten clicks
+  counter ++;
+  if (counter > 9) {
+    counter = 0;
+    if (desiredSpeed == 0) { // Stop is easy.
+      analogWrite(speedPin, 0);//Sets speed variable via PWM
+      digitalWrite(dir1Pin, HIGH);
+      digitalWrite(dir2Pin, HIGH);
+      return;      
+    }
+    if (currentSpeed > -5 && currentSpeed < 5) { // Overcome stopped friction.
+        motorPower = startPower;
+    }
+
+    boolean forwards = (desiredSpeed >= 0);
+    if (currentSpeed < desiredSpeed - 10) {
+        motorPower += forwards ? 10 : -10 ;
+    }
+    if (currentSpeed > desiredSpeed + 10) {
+        motorPower += forwards ? -10 : 10 ;
+    }
+    analogWrite(speedPin, motorPower);//Sets speed variable via PWM
+    digitalWrite(dir1Pin, forwards ? HIGH : LOW);
+    digitalWrite(dir2Pin, forwards ? LOW : HIGH);
+  }
 }
 
 void toggleWiFi() {
@@ -166,12 +194,8 @@ int getByte() {
 void report(Stream &out) {
   out.print("EstimatedSPeed: ");
   out.println(currentSpeed);
-  out.print("Encoder Value: ");
-  out.println(enc.read());
-  out.print("Desired Speed (index): ");
-  out.println(speedList[speedIndex]);
-  out.print(digitalRead(quadPinYellow));
-  out.print(digitalRead(quadPinGreen));
+  out.print("Desired Speed: ");
+  out.println(desiredSpeed);
   out.flush();
 }
 
@@ -201,15 +225,14 @@ void loop() {
       if (usingWiFi) help(client);
        help(Serial);
       break;
-      
     case '+': // Motor 1 Forward
-      speedIndex = min(speedIndex + 1, speedSize);
+      desiredSpeed = min(desiredSpeed + SPEED_STEP, 90);
       break;
     case '-': // Motor 1 Stop (Brake)
-      speedIndex = max(speedIndex - 1, 0);
+      desiredSpeed = max(desiredSpeed - SPEED_STEP, -60);
       break;
     case '0':
-      speedIndex = stopIndex;
+      desiredSpeed = 0;
       break;        
     case 'L':
       // always arrive from the same direction (from a higher angle)
@@ -235,26 +258,13 @@ void loop() {
       break;
     case 'F':
       // Blockage in front
-      speedIndex = min(speedIndex, stopIndex);
+      desiredSpeed = min(desiredSpeed, 0);
       break;
     case 'B':
       // Blockage behind
-      speedIndex = max(speedIndex, stopIndex);
+      desiredSpeed = max(desiredSpeed, 0);
       break;
     default:
       break;
-  }
-  if (speedList[speedIndex] > 0) {
-    analogWrite(speedPin, speedList[speedIndex]);//Sets speed variable via PWM
-    digitalWrite(dir1Pin, HIGH);
-    digitalWrite(dir2Pin, LOW);
-  } else if (speedList[speedIndex] < 0) {
-    analogWrite(speedPin, -1 * speedList[speedIndex]);//Sets speed variable via PWM
-    digitalWrite(dir1Pin, LOW);
-    digitalWrite(dir2Pin, HIGH);
-  } else {
-    analogWrite(speedPin, 0);//Sets speed variable via PWM
-    digitalWrite(dir1Pin, HIGH);
-    digitalWrite(dir2Pin, HIGH);      
   }
 }
