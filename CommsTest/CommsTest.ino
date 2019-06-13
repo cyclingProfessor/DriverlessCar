@@ -52,7 +52,7 @@ Timer triggerTimer(100, pinger, t_period, NULL );
 void setup() {
   Serial1.begin(115200);
   Serial5.begin(115200);
-  Serial2.begin(115200);
+  Serial2.begin(9600);
   for (int index = 0 ; index < 3 ; index++) {
     pinMode(triggerPin[index], OUTPUT);
     pinMode(echoPin[index], INPUT);
@@ -75,10 +75,19 @@ void setup() {
 boolean warnedFront = false, warnedRear = false;
 
 void loop() {
+  // At the moment just send  stuff between { and } to the Camera.
   if (Serial1.available()) {      // If anything comes in Serial (USB/pins 0,1/BLE),
     char next = Serial1.read();
-    Serial1.println(next);
-    Serial5.write(next);   // read it and send it to D1
+    if (next == '{') {
+      while (next != '}') {
+        Serial2.write(next);   // read it and send it to Camera
+        next = Serial1.read();
+      }
+      Serial2.write(next);   // Send '}' to the camera
+    } else {
+      Serial1.write(next);  // Echo standard stuff ...
+      Serial5.write(next);   // ... and send it to D1
+    }
   }
 
   if (Serial5.available()) {
@@ -90,11 +99,12 @@ void loop() {
   }
 
   if (Serial2.available()) {
-    Serial1.println("Camera");
-    while (Serial2.available()) {
-      Serial1.write(Serial2.read());
+    Serial2.findUntil("POS:", ":");
+    int where = Serial2.parseInt();
+    if (where != 160) {
+      Serial1.print("Camera returned position:");
+      Serial1.println(where);
     }
-    Serial1.println();
   }
 
   if (duration[REAR] < 1800) {
