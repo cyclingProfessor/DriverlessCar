@@ -8,3 +8,10 @@ It is a miracle that demonstrates the integrated and complementary infrastructur
 ====================================================
 
 Now moved some common code into the CarLib library - so after cloning the git archive you will need to copy this into your arduino IDE library folder.
+
+===================
+
+Build System.
+1. Must increase the Rx gain on the ANtenna to make RFID cards read fast enough.  This means adding one line to MFSC522 before PICC_..
+2. Must change cpp flags to enable C++ 2011 standard to use SPI I2C library for MMU.
+3. Must change SPI to SPI1 in the SDCard library so that it looks for the SDCard on the secondary SPI bus.

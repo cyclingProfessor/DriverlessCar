@@ -2,6 +2,15 @@
 #include <SPI.h>
 #include <MFRC522.h>
 
+/////////////////////////////////
+// Movelment Table:
+//  30 (far left) - 60 degrees left 170/60 := 2.8 degrees per blob
+//  330 (far right) - 50 degrees right := 2.6 degrees per blob
+// 200 (straight) 
+// 
+// Maximum 50 degres right, 60 degrees left (18 inch).
+//////////////////////////////////////////////////
+
 HardwareSerial &Serial = Serial1;
 
 /////////////////// RFID Section ///////////
@@ -11,13 +20,13 @@ constexpr uint8_t IRQ_PIN = 15; // seems to clash with echo pin interrupt on whe
 
 unsigned long currentID = 0L;
 
-MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance.
-constexpr uint8_t BLOCKS = 16;
-byte buffer[2 * BLOCKS + 2];
-constexpr uint8_t VAL_OFFSET = 6;
+//MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance.
+//constexpr uint8_t BLOCKS = 16;
+//byte buffer[2 * BLOCKS + 2];
+//constexpr uint8_t VAL_OFFSET = 6;
 
-volatile boolean bNewInt = false;
-volatile boolean foundCard = false;
+//volatile boolean bNewInt = false;
+//volatile boolean foundCard = false;
 
 ///////////////// Sonar Section //////////////////////////////
 #define RIGHT 0
@@ -48,6 +57,8 @@ void pinger(void *data) {
 
 Timer triggerTimer(100, pinger, t_period, NULL );
 
+int led = 13;  // Pin 13 has an LED connected on most Arduino boards.
+
 //////////////////////////////////////////////////////////////////////////////////
 void setup() {
   Serial1.begin(115200);
@@ -59,17 +70,17 @@ void setup() {
     digitalWrite(triggerPin[index], LOW);
     attachInterrupt(echoPin[index], echoFn[index], CHANGE);  // Attach interrupt to the sensor echo input
   }
-  SPI.begin();
-  mfrc522.PCD_Init(); // Init MFRC522 card
+//  SPI.begin();
+//  mfrc522.PCD_Init(); // Init MFRC522 card
     /* setup the IRQ pin*/
-  pinMode(IRQ_PIN, INPUT_PULLUP);
+//  pinMode(IRQ_PIN, INPUT_PULLUP);
 
-  mfrc522.PCD_WriteRegister(mfrc522.ComIEnReg, 0x20);
-  mfrc522.PCD_WriteRegister(mfrc522.DivIEnReg, 0x90);
+//  mfrc522.PCD_WriteRegister(mfrc522.ComIEnReg, 0x20);
+//  mfrc522.PCD_WriteRegister(mfrc522.DivIEnReg, 0x90);
 
   /*Activate the interrupt*/
-  attachInterrupt(IRQ_PIN, readCard, RISING);
-  activateRec(mfrc522);
+//  attachInterrupt(IRQ_PIN, readCard, RISING);
+//  activateRec(mfrc522);
   delay(100);
 }
 boolean warnedFront = false, warnedRear = false;
@@ -99,12 +110,23 @@ void loop() {
   }
 
   if (Serial2.available()) {
-    Serial2.findUntil("POS:", ":");
-    int where = Serial2.parseInt();
-    if (where != 160) {
-      Serial1.print("Camera returned position:");
-      Serial1.println(where);
+    int ch = 'P';
+    while (Serial2.available() && ch != ':') {
+      ch = Serial2.read();
     }
+    int where = Serial2.parseInt();
+//    if (where != 160) {
+      Serial5.write('~');
+      // Map 200-330 to 9-14
+      // Map 30-200 to 3-9
+      if (where >= 160) {
+//        Serial1.println(9 + (where - 160) * 5/100);
+        Serial5.write(9 + (where - 160) * 5/100);        
+      } else {
+//        Serial1.println(9 + (where - 160) * 6/140);
+        Serial5.write(9 + (where - 160) * 6/140);        
+      }
+//    }
   }
 
   if (duration[REAR] < 1800) {
@@ -127,90 +149,90 @@ void loop() {
     warnedFront = false;
   }
 
-  if (bNewInt) { //new read interrupt
-    bNewInt = false;
-    if (foundCard) {
-      unsigned long nextID = getID();
-      Serial.print("Emergency Stop!");
-      Serial5.write('0');
-      if (nextID != currentID) {
-        currentID = nextID;
-        Serial.print(" Card says: ");
-        Serial.print("<");
-        Serial.print((char *)buffer + VAL_OFFSET);
-        Serial.print(">");
-      }
-      Serial.println();
-    }
-    foundCard = false;
-  }
-  delay(100);
+//  if (bNewInt) { //new read interrupt
+//    bNewInt = false;
+//    if (foundCard) {
+//      unsigned long nextID = getID();
+//      Serial.print("Emergency Stop!");
+//      Serial5.write('0');
+//      if (nextID != currentID) {
+//        currentID = nextID;
+//        Serial.print(" Card says: ");
+//        Serial.print("<");
+//        Serial.print((char *)buffer + VAL_OFFSET);
+//        Serial.print(">");
+//      }
+//      Serial.println();
+//    }
+//    foundCard = false;
+//  }
+  delay(10);
 }
 
 
 /**
    MFRC522 interrupt serving routine
 */
-void readCard() {
-  bNewInt = true;
-  clearInt(mfrc522);
-  // Look for new cards
-  if ( ! mfrc522.PICC_IsNewCardPresent())
-    return;
-  mfrc522.PICC_ReadCardSerial(); //read the tag data
-
-  if (!readCardData())
-    return;
-  activateRec(mfrc522);
-  foundCard = true;
-}
-
-/*
-   The function sending to the MFRC522 the needed commands to activate the reception
-*/
-inline void activateRec(MFRC522 mfrc522) {
-  mfrc522.PCD_WriteRegister(mfrc522.FIFODataReg, mfrc522.PICC_CMD_REQA);
-  mfrc522.PCD_WriteRegister(mfrc522.CommandReg, mfrc522.PCD_Transceive);
-  mfrc522.PCD_WriteRegister(mfrc522.BitFramingReg, 0x87);
-}
-
-/*
-   The function to clear the pending interrupt bits after interrupt serving routine
-*/
-inline void clearInt(MFRC522 mfrc522) {
-  mfrc522.PCD_WriteRegister(mfrc522.ComIrqReg, 0x7F);
-}
-
-
-boolean readCardData() {
-  MFRC522::StatusCode status;
-  byte size = BLOCKS + 2;
-
-  byte blockAddr = 6;
-  status = (MFRC522::StatusCode) mfrc522.MIFARE_Read(blockAddr, buffer, &size);
-  if (status != MFRC522::STATUS_OK) {
-    return false;
-  }
-  blockAddr = 10;
-  status = (MFRC522::StatusCode) mfrc522.MIFARE_Read(blockAddr, buffer + 16, &size);
-  if (status != MFRC522::STATUS_OK) {
-    return false;
-  }
-  
-  // second byte indicates length
-  int length = buffer[1] - 3;  // Need to subtract 3 to get actual string length
-  buffer[length + VAL_OFFSET] = 0;
-  return true;
-}
-
-unsigned long getID(){
-  unsigned long hex_num;
-  hex_num =  mfrc522.uid.uidByte[0] << 24;
-  hex_num += mfrc522.uid.uidByte[1] << 16;
-  hex_num += mfrc522.uid.uidByte[2] <<  8;
-  hex_num += mfrc522.uid.uidByte[3];
-  return hex_num;
-}
+//void readCard() {
+//  bNewInt = true;
+//  clearInt(mfrc522);
+//  // Look for new cards
+//  if ( ! mfrc522.PICC_IsNewCardPresent())
+//    return;
+//  mfrc522.PICC_ReadCardSerial(); //read the tag data
+//
+//  if (!readCardData())
+//    return;
+//  activateRec(mfrc522);
+//  foundCard = true;
+//}
+//
+///*
+//   The function sending to the MFRC522 the needed commands to activate the reception
+//*/
+//inline void activateRec(MFRC522 mfrc522) {
+//  mfrc522.PCD_WriteRegister(mfrc522.FIFODataReg, mfrc522.PICC_CMD_REQA);
+//  mfrc522.PCD_WriteRegister(mfrc522.CommandReg, mfrc522.PCD_Transceive);
+//  mfrc522.PCD_WriteRegister(mfrc522.BitFramingReg, 0x87);
+//}
+//
+///*
+//   The function to clear the pending interrupt bits after interrupt serving routine
+//*/
+//inline void clearInt(MFRC522 mfrc522) {
+//  mfrc522.PCD_WriteRegister(mfrc522.ComIrqReg, 0x7F);
+//}
+//
+//
+//boolean readCardData() {
+//  MFRC522::StatusCode status;
+//  byte size = BLOCKS + 2;
+//
+//  byte blockAddr = 6;
+//  status = (MFRC522::StatusCode) mfrc522.MIFARE_Read(blockAddr, buffer, &size);
+//  if (status != MFRC522::STATUS_OK) {
+//    return false;
+//  }
+//  blockAddr = 10;
+//  status = (MFRC522::StatusCode) mfrc522.MIFARE_Read(blockAddr, buffer + 16, &size);
+//  if (status != MFRC522::STATUS_OK) {
+//    return false;
+//  }
+//  
+//  // second byte indicates length
+//  int length = buffer[1] - 3;  // Need to subtract 3 to get actual string length
+//  buffer[length + VAL_OFFSET] = 0;
+//  return true;
+//}
+//
+//unsigned long getID(){
+//  unsigned long hex_num;
+//  hex_num =  mfrc522.uid.uidByte[0] << 24;
+//  hex_num += mfrc522.uid.uidByte[1] << 16;
+//  hex_num += mfrc522.uid.uidByte[2] <<  8;
+//  hex_num += mfrc522.uid.uidByte[3];
+//  return hex_num;
+//}
 
 void rightEcho() {
   calcDistance(RIGHT);
