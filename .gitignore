@@ -31,3 +31,6 @@
 *.out
 *.app
 *.bin
+
+# Python cache
+*.pyc
