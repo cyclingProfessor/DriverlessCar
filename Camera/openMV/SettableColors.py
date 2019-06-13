@@ -14,22 +14,25 @@ def statusOkay(img):
 
 def statusBad(img):
     return img.draw_rectangle(0,0,30,30, color=(255,0,0), fill=True)
-
 ###################################################################
-def blobFind(showTime = False, statusDraw = None):
+# LCD is 128x160
+# We are working on QVGA which is 320x240
+def blobFind(statusDraw = None):
     clock.tick();
     img = sensor.snapshot()
     xPos = 160 # Centre of field
-    for blob in img.find_blobs([threshold], pixels_threshold=50, area_threshold=50, merge=True, margin=10, roi=(0,180,320,30)):
+    for blob in img.find_blobs([threshold], area_threshold=450, merge=True, margin=10, roi=(0,180,320,30)):
         img.draw_rectangle(blob.rect(),fill=True)
         xPos = blob.cx() # Actually better to use some function defining the angle to the camera.
-    img.crop(x_scale=0.3,y_scale=0.5)
-    if showTime:
-        img.draw_string(10, 30, str(clock.fps()),scale=4)
+    img.crop(x_scale=128/320,y_scale=160/240)
+    img.draw_rectangle(0,120,128,20)
+    img.draw_string(30, 10, str(clock.fps()),scale=2)
+    retval = str(xPos)
+    retval = ("0" * (3 - len(retval))) + retval
+    img.draw_string(64 - 50, 120, retval,scale=4, color=(0,0,255))
 
     lcd.display(statusDraw(img))
-    retval = str(xPos)
-    return ("0" * (3 - len(retval))) + retval
+    return retval
 
 
 ###################################
@@ -71,9 +74,7 @@ while(True):
             for i in range(4):
                 threshold[i + 2] = int(''.join(message.dataBuffer[index:index + 3])) - 128
                 index = index + 3
-            print(threshold)
     elif message.status == MSG_BAD:
         msgStatus = statusBad
 
-    blobFind(True, msgStatus)
-    #uart.write("POS:" + blobFind(True))
+    uart.write("POS:" + blobFind(msgStatus))
