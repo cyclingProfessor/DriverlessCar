@@ -42,6 +42,7 @@ buffer = bytearray(20)
 uart = UART(3, 9600, timeout=100, timeout_char=50)
 #threshold = [64, 79, -49, -19, -28, -4]
 threshold = [0, 100, -128, 127, -128, 127]
+reportMode = False
 
 ##########################################################################
 # MAIN CODE
@@ -74,7 +75,17 @@ while(True):
             for i in range(4):
                 threshold[i + 2] = int(''.join(message.dataBuffer[index:index + 3])) - 128
                 index = index + 3
+        elif message.command == 'L': # Reset light balance
+            sensor.set_auto_gain(True)
+            sensor.set_auto_whitebal(True)
+            sensor.skip_frames(time = 2000)
+            sensor.set_auto_gain(False)
+            sensor.set_auto_whitebal(False)
+        elif message.command == 'R': # Toggle report mode.
+            reportMode = not reportMode;
     elif message.status == MSG_BAD:
         msgStatus = statusBad
 
-    uart.write("POS:" + blobFind(msgStatus))
+    position = blobFind(msgStatus)
+    if reportMode:
+        uart.write("POS:" + position)

@@ -48,7 +48,7 @@ class StateCMD(State):
         self._name = "CMD"
     def handleChar(self, rdr, recvd):
         global message
-        if recvd != 'C': # Only one command for now!
+        if not recvd in ['C', 'R', 'L']: # Possible commands
             print(self._name + " - got Bad:" + recvd)
             message.status = MSG_BAD
             rdr._state = myStateWaiting

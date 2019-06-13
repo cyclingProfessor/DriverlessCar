@@ -77,6 +77,14 @@ class TestReader(unittest.TestCase):
 			rdr.handleChar(input1[index])
 		self.assertEqual(message.status, MSG_GOOD)
 		self.assertIs(rdr._state, myStateWaiting)
+	def test_NOArgs(self):
+		rdr = Reader()
+		rdr.handleChar('{')
+		rdr.handleChar('L')
+		rdr.handleChar('@')
+		rdr.handleChar('}')
+		self.assertEqual(message.status, MSG_GOOD)
+		self.assertIs(rdr._state, myStateWaiting)
 
 
 if __name__ == '__main__':
