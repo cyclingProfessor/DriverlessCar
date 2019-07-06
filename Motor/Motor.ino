@@ -207,6 +207,12 @@ Command getCommand() {
     if (next == 'W') {
       return WIFI;
     }
+    if (next == 'F') {
+      return BLOCK_FRONT;
+    }
+    if (next == 'B') {
+      return BLOCK_BACK;
+    }
     // There will be another character - just wait here now.
     while (!Serial.available()) {
     }
