@@ -86,24 +86,21 @@ class TestReader(unittest.TestCase):
         self.assertEqual(message.status, MSG_GOOD)
         self.assertIs(rdr._state, myStateWaiting)
     def test_Image(self):
-        fl = open("testImage", "rb")
-        img = fl.read()
-        fl.close()
         rdr = Reader()
         rdr.handleChar('{')
-        bCount = len(img).to_bytes(2, byteorder='little')
         rdr.handleChar('P')
-        rdr.handleChar(bCount[0])
-        rdr.handleChar(bCount[1])
-        for index in range(len(img)):
-            rdr.handleChar(img[index])
+        rdr.handleChar(chr(44))
+        rdr.handleChar(chr(33))
+        for index in range(44 * 33):
+            rdr.handleChar(chr(254))
+            rdr.handleChar(chr(124))
+            rdr.handleChar(chr(0))
         rdr.handleChar('}')
-        fl = open("IMAGE", "rb")
-        imgNew = fl.read()
-        fl.close()
         self.assertEqual(message.status, MSG_GOOD)
         self.assertIs(rdr._state, myStateWaiting)
-        self.assertSequenceEqual(imgNew, img)
+        self.assertEqual(message.picture.width(), 44)
+        self.assertEqual(message.picture.height(), 33)
+        self.assertSequenceEqual(message.picture[199], (254, 124, 0))
 
 if __name__ == '__main__':
     unittest.main()

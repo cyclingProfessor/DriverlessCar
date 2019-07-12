@@ -1,7 +1,8 @@
-import sensor, image, lcd, time
-import time, utime
-from pyb import UART, LED, USB_VCP
-from State import Reader, MSG_GOOD, MSG_BAD, MSG_NONE, Message, message
+import sensor, image, lcd, time, utime
+from pyb import UART, LED, USB_VCP, Timer
+from State import Reader, MSG_GOOD, MSG_BAD, MSG_NONE, MSG_PARTIAL, Message, message
+from uos import stat
+from sys import exit
 
 # A message
 # START: CMD: Length: Data : End
@@ -14,6 +15,9 @@ def statusOkay(img):
 
 def statusBad(img):
     return img.draw_rectangle(0,0,30,30, color=(255,0,0), fill=True)
+
+def statusFind(img):
+    return img.draw_rectangle(0,0,30,30, color=(0,0,0), fill=True)
 ###################################################################
 # LCD is 128x160
 # We are working on QVGA which is 320x240
@@ -31,18 +35,28 @@ def blobFind(statusDraw = None):
     retval = ("0" * (3 - len(retval))) + retval
     img.draw_string(64 - 50, 120, retval,scale=4, color=(0,0,255))
 
+    if showImage:
+        img.draw_image(message.picture, 20,20)
     lcd.display(statusDraw(img))
     return retval
+
+#########################################
+### One off Timer callback
+def clearImage(tim):
+    global showImage
+    tim.deinit()
+    showImage = False
 
 
 ###################################
 # GLOBALS
 clock = time.clock()
 buffer = bytearray(20)
-uart = UART(3, 9600, timeout=100, timeout_char=50)
-#threshold = [64, 79, -49, -19, -28, -4]
+uart = UART(3, 460800)
+#threshold = [64, 79, -49, -19, -28, -4] # Green Line
 threshold = [0, 100, -128, 127, -128, 127]
 reportMode = False
+showImage = False
 
 ##########################################################################
 # MAIN CODE
@@ -63,8 +77,9 @@ msgStatus = statusOkay
 
 while(True):
     while uart.any() > 0:
-        # change mode depending on UART input.
-        rdr.handleChar(chr(uart.readchar()))
+        next = uart.readchar()
+        rdr.handleChar(chr(next))
+        uart.writechar(next)
     if message.status == MSG_GOOD:
         message.status = MSG_NONE
         msgStatus = statusOkay
@@ -83,9 +98,17 @@ while(True):
             sensor.set_auto_whitebal(False)
         elif message.command == 'R': # Toggle report mode.
             reportMode = not reportMode;
+        elif message.command == 'P': # Show image file on screen.
+            showImage = True
+            tim = Timer(4, freq=0.2)
+            tim.callback(clearImage)
     elif message.status == MSG_BAD:
         msgStatus = statusBad
 
-    position = blobFind(msgStatus)
-    if reportMode:
-        uart.write("POS:" + position)
+    # Fast processing if we are getting a message from Bluno
+    if message.status != MSG_PARTIAL:
+        if reportMode:
+            uart.write("POS:" + position)
+            position = blobFind(statusFind)
+        else:
+            position = blobFind(msgStatus)

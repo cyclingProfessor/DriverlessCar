@@ -1,3 +1,5 @@
+import image, sensor
+
 START = '{' # 123
 END = '}' # 125
 MSG_GOOD = 1
@@ -16,6 +18,7 @@ class Message:
         self.status = MSG_NONE # -2 for None yet, -1 for error, 0 for partial, 1 for complete
         self.dataCount = 0
         self.expected = -1
+        self.picture = None
 
 ######################################################################################
 message = Message()
@@ -34,37 +37,53 @@ class State:
 class StateImageReader(State):
     def __init__(self):
         global message
-        self.called = 0;
-        self._name = "BMP Image Reader"
+        self.called = False;
+        self._name = "Image Reader"
+        self.width = 0
     def handleChar(self, rdr, recvd):
         global message
-        # The first two bytes are little endian length of file.
-        if self.called == 0:
-            message.dataCount += recvd
-        else:
-            message.dataCount += 256 * recvd
-        self.called += 1
-        if self.called < 2:
+        # The first two bytes are Row and Column counts.
+        if not self.called:
+            self.width = ord(recvd) # Number of Columns
+            self.called = True
             return
-        if message.dataCount > 10000:
-            print(self._name + " - got Bad Image Length:" + message.dataCount)
+        message.picture = image.Image(self.width, ord(recvd), sensor.RGB565)
+        # Pixel values are all even as a simple error check.
+        # Of course start (123) and end (125) now cannot occur in an image
+        message.expected = self.width * ord(recvd) # Number of Pixels (each is three numbers)
+        message.dataCount = 0;
+        self.called = False
+
+        print("Expecting : " + str(message.expected))
+        if message.expected > 10000:
+            print(self._name + " - got Bad Image Size:" + str(message.expected))
             message.status = MSG_BAD
             rdr._state = myStateWaiting
             return
-        rdr._state = myReadFile
+        rdr._state = myReadPixels
 
-class StateReadFile(State):
+class StateReadPixels(State):
     def __init__(self):
-        self._name = "Image File Reader"
-        self.fl = open("IMAGE", "wb+")
+        self._name = "Pixel Reader"
+        self.colorIndex = 0
+        self.color = [None, None, None]
     def handleChar(self, rdr, recvd):
         global message
-        self.fl.write(bytes([recvd]))
-        message.dataCount -= 1
-        if message.dataCount > 0:
+        if ord(recvd) % 2 == 1:
+            self.colorIndex = 0;
+            print(self._name + " - got Bad:" + str(recvd))
+            message.status = MSG_BAD
+            rdr._state = myStateWaiting
             return
-        self.fl.close()
-        rdr._state = myStateEnd
+        self.color[self.colorIndex] = ord(recvd)
+        self.colorIndex = self.colorIndex + 1
+        if self.colorIndex < 3:
+            return
+        self.colorIndex = 0
+        message.picture[message.dataCount] = self.color
+        message.dataCount += 1
+        if message.dataCount == message.expected:
+            rdr._state = myStateEnd
 
 class StateWaiting(State):
     def __init__(self):
@@ -151,7 +170,7 @@ myStateCount = StateCount()
 myStateData = StateData()
 myStateEnd = StateEnd()
 myImageReader = StateImageReader()
-myReadFile = StateReadFile()
+myReadPixels = StateReadPixels()
 class Reader:
     """ This is the state pattern to respond to UART tokens
 
