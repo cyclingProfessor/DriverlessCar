@@ -1,6 +1,6 @@
 import sensor, image, lcd, time, utime
 from pyb import UART, LED, USB_VCP, Timer
-from State import Reader, MSG_GOOD, MSG_BAD, MSG_NONE, MSG_PARTIAL, Message, message
+from State import Reader, MSG_GOOD, MSG_BAD, MSG_NONE, MSG_PARTIAL, Message
 from uos import stat
 from sys import exit
 
@@ -57,6 +57,7 @@ uart = UART(3, 460800)
 threshold = [0, 100, -128, 127, -128, 127]
 reportMode = False
 showImage = False
+message = Message()
 
 ##########################################################################
 # MAIN CODE
@@ -99,6 +100,7 @@ while(True):
         elif message.command == 'R': # Toggle report mode.
             reportMode = not reportMode;
         elif message.command == 'P': # Show image file on screen.
+            print("Got a Piccy")
             showImage = True
             tim = Timer(4, freq=0.2)
             tim.callback(clearImage)
