@@ -59,7 +59,7 @@ long lastTime = 0L;
 void setup() {
   Serial1.begin(115200);
   Serial5.begin(115200);
-  Serial2.begin(115200);
+  Serial2.begin(460800);
   for (int index = 0 ; index < 3 ; index++) {
     pinMode(triggerPin[index], OUTPUT);
     pinMode(echoPin[index], INPUT);
