@@ -3,72 +3,39 @@
 
 const int chipSelect = 31;
 
-const int MAX_LINE = 200;
-unsigned char buffer[MAX_LINE];
-struct pixel {
-  unsigned char red;
-  unsigned char green;
-  unsigned char blue;
-};
-struct image {
-  int height;
-  int width;
-  pixel *val;
-};
+struct image_t {
+  unsigned len;
+  unsigned char width;
+  unsigned char height;
+  unsigned char *data;
+  unsigned char id[7];
+} image;
 
-char * readHeaderLine(File fp) {
-  // Check first character
-  unsigned char next = fp.read();
-  while (next == '#') { // We ignore these lines
-    while (next != '\n') { // We can assume nice line feeds
-      next = fp.read(); 
-    }
-    next = fp.read();
-  }
-  // Now we have a real line, read it
-  int index = 0;
-  while (next != '\n' && index < MAX_LINE) {
-    buffer[index++] = next;
-    next = fp.read();
-  }
-  buffer[index] = '\0';
-  return buffer;
+bool readMagic(File fp) {
+  return (fp.read() == 'P'&& fp.read() == '6');
 }
 
-bool readPPM(char * name, image &im) {
-  File dataFile = SD.open(name);
-  if (!dataFile) return false;
-  // Now read ppm file into memory.
-  if (strncmp("P6", readHeaderLine(dataFile), 2)) {
-    Serial1.println("Not a PPM file");
-    return false;
-  }    
-  if (sscanf(readHeaderLine(dataFile), "%d %d", &im.width, &im.height) != 2) {
-    Serial1.println("Missing width height line in the PPM file");
-    return false;
+bool readFile(File fp) {
+  image.len = fp.size() - 31;
+  Serial1.print("The IMAGE.Z file has a payload of size: ");
+  Serial1.println(image.len); 
+  if (image.len >=  (1 << 12)) { // Data too long!
+    return false; 
   }
-  unsigned maxValue = 0;
-  if (sscanf(readHeaderLine(dataFile), "%d", &maxValue) != 1) {
-    Serial1.println("Missing max pixel value line in the PPM file");
-    return false;
-  }
-  if (im.height > 100 || im.width > 64 || maxValue != 255) {
-    Serial1.println("Bad values in the PPM file");
-    Serial1.println(im.width), Serial1.println(im.height), Serial1.println(maxValue);
+
+  // Check first characters
+  if (!readMagic(fp)) return false;
+  Serial1.println("The magic bytes (P6) are correct");
+  image.width = fp.read();
+  image.height = fp.read();
+  image.data = new unsigned char[image.len];
+  Serial1.print("The Image has width:"); Serial1.print(image.width); Serial1.print(" and height:"); Serial1.println(image.height);
+  if (fp.read(image.data, image.len) != image.len) {
+    delete image.data;
     return false;
   }
-  Serial1.println("Storing Image Pixels before Sending");
-  int size = im.width * im.height;
-  im.val = new pixel[size];
-  int count = 0;
-  while (size > count && dataFile.available()) {
-    im.val[count].red = (dataFile.read() / 2) * 2;
-    im.val[count].green = (dataFile.read() / 2) * 2;
-    im.val[count].blue = (dataFile.read() / 2) * 2;
-    count++;
-  }
-  dataFile.close();
-  return count == size;
+  Serial1.println("Managed to read the payload for sending over to the camera");
+  return true;
 }
 
 void setup()
@@ -90,21 +57,24 @@ void setup()
   }
   Serial1.println("card initialized.");
 
-  image im;
-  if (readPPM("IMAGE.ppm", im)) {
+  File imFile = SD.open("IMAGE.Z");
+  if (readFile(imFile)) {
     sendNext('{');
     sendNext('P');
-    sendNext(im.width);
-    sendNext(im.height);
+    sendNext(image.width);
+    sendNext(image.height);
+    sendNext((image.len >> 6) & 0x3F); // Max 12 bits length sent.
+    sendNext(image.len & 0x3F);
 
     bool keepGoing = true;
     int count = 0;
-    while (count < im.height * im.width && keepGoing) {
-      keepGoing &= sendNext(im.val[count].red);
-      keepGoing &= sendNext(im.val[count].green);
-      keepGoing &= sendNext(im.val[count].blue);
+    while (count < image.len) {
+      keepGoing &= sendNext(image.data[count]);
       count++;
-      Serial1.println(count);
+      Serial1.print(".");
+      if (count %60 == 0) {
+        Serial1.println();
+      }
     }
     sendNext('}');
   } else {
