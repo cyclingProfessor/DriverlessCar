@@ -55,17 +55,27 @@ def compress(data) -> bytes:
 
 class DataStore:
     def __init__(self, coded):
-        self.data = coded
+        assert(len(coded) != 0)
+        self.data = coded # If we are in incremental mode then coded will be a 2 byte array
         self.__byte_offset = 0
         self.__bit_offset = 0
         self.__empty = False
-        self.__set_current()
-    def setNewData(self, nextBytes):
+    def setStoreToByte(self, ch):
         # Here the idea is that we have just one new byte each time.  So even though we were empty
         # we have now got more data.
         # Because of data transparency it is a problem keeping the bit buffer the calling function must
-        # process the escape '|' character, or make sure that the final character in the nextBytes array is never escape. 
-        pass
+        # process the escape '|' character, or make sure that the final character in the nextBytes array is never escape.
+        assert(ch != '|' and self.__byte_offset != 0 and self.__byte_offset <= 2)
+        self.data[0] = self.data[1]
+        self.data[1] = ch
+        self.__byte_offset -= 1
+        self.__Empty = False
+
+    def getFirst(self):
+        retval = self.__processEscape()
+        self.__set_current()
+        return retval
+
     def getNext(self, key_size):
         # set current
         assert(key_size >= 8 and key_size < 16)
@@ -77,18 +87,15 @@ class DataStore:
         retval = (self.__current & mask) << remaining_bits
 
         # Now fill in remaining bits - have to notice escape character.
-        self.__byte_offset += 1
         self.__set_current()
         if remaining_bits >= 8:
             remaining_bits -= 8
             retval |= self.__current << remaining_bits 
-            self.__byte_offset += 1
             self.__set_current()
 
         retval |= self.__current >> (8 - remaining_bits)
         self.__bit_offset = remaining_bits
         if (self.__bit_offset == 8): # we have read the whole current byte
-            self.__byte_offset += 1
             self.__bit_offset = 0
             self.__set_current()
         return retval
@@ -96,12 +103,17 @@ class DataStore:
     def __set_current(self):
         if self.__empty:
             return
-        adjust = 0
-        if self.data[self.__byte_offset] == ord('|'):
-            adjust = 10
-            self.__byte_offset += 1
-        self.__current = self.data[self.__byte_offset] + adjust
+        self.__byte_offset += 1
+        self.__current = self.__processEscape()
         self.__empty = (len(self.data) <= 1 + self.__byte_offset)
+
+    def __processEscape(self):
+        retval = self.data[self.__byte_offset]
+        if retval == ord('|'):
+            self.__byte_offset += 1
+            retval = self.data[self.__byte_offset] + 10
+        return retval
+
     def isEmpty(self):
         return self.__empty
 
@@ -135,6 +147,7 @@ class DataSaver(Saver):
 class Coder:
     def __init__(self, table):
         self.__keys = table
+#        print (len(table))
         self.__n_keys = 256
         self.__keySize = 8
         # self.keys = [] # array indexed by code: 2byte code, 1 byte letter (stored as bytes())
@@ -176,8 +189,8 @@ class Coder:
 def uncompress(data, saver):
     # First saving - do not keep the dictionary for codes up to 255.
     ds = DataStore(data)
-    keyCodes = Coder(len(data))
-    code = ds.getNext(8)
+    keyCodes = Coder([None] * len(data))
+    code = ds.getFirst()
     previous = keyCodes.decode(code)
     saver.add(previous)
     while not ds.isEmpty():
@@ -191,17 +204,24 @@ def uncompress(data, saver):
         previous = current
 
 class Uncompressor:
-    def __init__(self, svr, coder):
+    def __init__(self, svr, coder, dataStore):
         self.saver = svr
         self.keyCodes = coder
         self.previous = None
-    def uncompressFirst(self, code):
+        self.ds = dataStore
+
+    def uncompressNext(self, ch):
+        assert(ch != '|') # A data store cannot end with an escape character.
+        self.ds.addToStore(ch)
+        self.uncompressData()
+
+    def uncompressFirst(self):
+        code = ds.getFirst()
         self.previous = code
         self.saver.add(self.previous)
-    def uncompressBytes(self, dataStore):
-        ds = dataStore
-        while not ds.isEmpty():
-            code = ds.getNext(self.keyCodes.getAndUpdateKeySize())
+    def __uncompressBytes(self):
+        while not self.ds.isEmpty():
+            code = self.ds.getNext(self.keyCodes.getAndUpdateKeySize())
             try:
                 current = self.keyCodes.decode(code)
             except KeyError:
@@ -212,24 +232,32 @@ class Uncompressor:
 
 # Now uses adaptive length.
 def decompress(data, uncompressed):
-    uc = Uncompressor(DataSaver(uncompressed), Coder([None] * len(data)))
-    if data[0] == ord('|'):
-        data[1] += 10
-        data = data[1:]
-    uc.uncompressFirst(data[:1])
-    uc.uncompressBytes(DataStore(data[1:]))
+    uncompress(data, DataSaver(uncompressed))
+    # uc = Uncompressor(DataSaver(uncompressed), Coder([None] * len(data)))
+    # if data[0] == ord('|'):
+    #     data[1] += 10
+    #     data = data[1:]
+    # uc.uncompressFirst(data[:1])
+    # uc.uncompressBytes(DataStore(data[1:]))
 
 # Now uses adaptive length.
 def decompressImage(data, image):
-    uc = Uncompressor(ImageSaver(image), Coder([None] * len(data)))
-    if data[0] == ord('|'):
-        data[1] += 10
-        data = data[1:]
-    uc.uncompressFirst(data[:1])
-    uc.uncompressBytes(DataStore(data[1:]))
+    uncompress(data, ImageSaver(image))
+    # uc = Uncompressor(ImageSaver(image), Coder([None] * len(data)))
+    # if data[0] == ord('|'):
+    #     data[1] += 10
+    #     data = data[1:]
+    # uc.uncompressFirst(data[:1])
+    # uc.uncompressBytes(DataStore(data))
 
 def decompressImageStart(image, compressTable):
-    pass
+    return Uncompressor(ImageSaver(image), Coder(compressTable))
 
-def decompressImageProcess(recvd):
-    pass
+# Deals with escapes outside
+def decompressImageProcess(uc, recvd, first=True):
+    assert(recvd != '|')
+    if first:
+        uc.uncompressFirst(recvd)
+        uc.setDataStore(DataStore(), None)
+    else:
+        uc.uncompressNext(recvd)
