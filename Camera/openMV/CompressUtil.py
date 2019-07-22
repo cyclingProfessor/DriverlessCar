@@ -246,5 +246,4 @@ def decompressImageStart(image, compressTable, recvd):
 
 # Deals with escapes outside
 def decompressImageProcess(uc, recvd):
-    print('Process called for: ', recvd)
     uc.uncompressNext(recvd)

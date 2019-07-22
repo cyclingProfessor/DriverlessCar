@@ -80,16 +80,23 @@ class TestReader(unittest.TestCase):
         code = compress(data)
         image = [None] * 1111
         offset = 0
-        firstArg = bytearray(2)
+        firstArg = bytearray(3)
         firstArg[0] = code[offset]
         if code[offset] == ord('|'):
             offset += 1
             firstArg[0] = code[offset] + 10
+
         offset += 1
         firstArg[1] = code[offset]
         if code[offset] == ord('|'):
             offset += 1
             firstArg[1] = code[offset] + 10
+
+        offset += 1
+        firstArg[2] = code[offset]
+        if code[offset] == ord('|'):
+            offset += 1
+            firstArg[2] = code[offset] + 10
         offset += 1
 
         uc = decompressImageStart(image, [None] * len(data), firstArg)
