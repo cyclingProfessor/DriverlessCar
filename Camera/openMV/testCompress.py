@@ -6,7 +6,7 @@ class TestReader(unittest.TestCase):
     def test_Basic(self):
         data = b"I am a String"
         code = compress(data)
- #       print(bin(int.from_bytes(code, 'big')))
+#        print(bin(int.from_bytes(code, 'big')))
         uncompressed = bytearray(len(data))
         decompress(code, uncompressed)
         self.assertSequenceEqual(data, uncompressed)
@@ -22,6 +22,7 @@ class TestReader(unittest.TestCase):
         seed(0)
         data = bytes(randrange(255) for i in range(10000))
         code = compress(data)
+        print('Length of compressed data', len(code))
         uncompressed = bytearray(len(data))
         decompress(code, uncompressed)
         self.assertSequenceEqual(data, uncompressed)
@@ -71,6 +72,34 @@ class TestReader(unittest.TestCase):
         code = compress(data)
         image = [None] * 1111
         decompressImage(code, image)
+        self.assertSequenceEqual(data, [item for sublist in image for item in sublist])
+
+    def test_RGB565_stream(self):
+        seed(0)
+        data = bytes(randrange(255) for i in range(3333))
+        code = compress(data)
+        image = [None] * 1111
+        offset = 0
+        firstArg = bytearray(2)
+        firstArg[0] = code[offset]
+        if code[offset] == ord('|'):
+            offset += 1
+            firstArg[0] = code[offset] + 10
+        offset += 1
+        firstArg[1] = code[offset]
+        if code[offset] == ord('|'):
+            offset += 1
+            firstArg[1] = code[offset] + 10
+        offset += 1
+
+        uc = decompressImageStart(image, [None] * len(data), firstArg)
+        addition = 0
+        for ch in code[offset:]:
+            if ch == ord('|'):
+                addition = 10
+                continue
+            decompressImageProcess(uc, ch + addition)
+            addition = 0
         self.assertSequenceEqual(data, [item for sublist in image for item in sublist])
 
 if __name__ == '__main__':

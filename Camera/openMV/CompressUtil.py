@@ -41,40 +41,53 @@ def compress(data) -> bytes:
     # Now we need to add zeroes to the end of this string so that the last byte begins with the last code bits
     bits = ''.join(compressed)
     if len(bits) % 8 != 0:
+#        print('padding')
         bits += ('0' * (8 - (len(bits) % 8)))
-    #print(bits)
+#    print(len(bits), ' ', range(ceil(len(bits) / 8)))
     retval = bytearray()
     for index in range(ceil(len(bits) / 8)):
         next_byte = int(bits[8 * index:8 * index + 8], 2)
         if next_byte in (ord('{'), ord('}'), ord('|')): # actually 123, 124, 125
             retval.append(ord('|')) # The Escape character
             next_byte -= 10
+#            print('ESCAPE', index)
         retval.append(next_byte)
     # print("Num Keys: "  + str(numWords) + ", and average size: " + str(sizeWords / numWords))
     return retval
 
 class DataStore:
-    def __init__(self, coded):
+    def __init__(self, coded, streamed = False):
         assert(len(coded) != 0)
-        self.data = coded # If we are in incremental mode then coded will be a 2 byte array
+        self.data = coded # If we are in incremental mode then coded will be a 3 byte array, and will not be escaped
         self.__byte_offset = 0
         self.__bit_offset = 0
-        self.__empty = False
+        self.__streamed = streamed
+
     def setStoreToByte(self, ch):
-        # Here the idea is that we have just one new byte each time.  So even though we were empty
-        # we have now got more data.
-        # Because of data transparency it is a problem keeping the bit buffer the calling function must
-        # process the escape '|' character, or make sure that the final character in the nextBytes array is never escape.
-        assert(ch != '|' and self.__byte_offset != 0 and self.__byte_offset <= 2)
-        self.data[0] = self.data[1]
-        self.data[1] = ch
+        # Add next character to the end of the array
+        for index in range(2):
+            self.data[0 + index] = self.data[1 + index]
+        self.data[2] = ch
         self.__byte_offset -= 1
-        self.__Empty = False
 
     def getFirst(self):
-        retval = self.__processEscape()
-        self.__set_current()
+#        print('Initial data bytes', self.data[0], self.data[1])
+        retval = self.__processEscape() # The first byte
+        self.__set_current() # increments __byte_offset and Sets __current to the (second) data byte
+#        print(self.__byte_offset)
         return retval
+
+    def hasNextCode(self, key_size):
+        # Here we count bytes that are beyond the .__byteCount index in .data to make sure that
+        if self.__streamed:
+            return 8 * (len(self.data) - self.__byte_offset) >= key_size + self.__bit_offset
+        remaining_bits = key_size + self.__bit_offset - 8
+        index = self.__byte_offset
+#        print('Checking whether we have more codes in the data buffer. Remaining Bits: ', remaining_bits, 'Current part byte at offset', self.__byte_offset, ' Data Length:', len(self.data))
+        while remaining_bits > 0 and index < len(self.data) - 1:
+            remaining_bits -= 0 if self.data[index] == ord('|') else 8
+#        print('    Answer:', remaining_bits <= 0)
+        return remaining_bits <= 0
 
     def getNext(self, key_size):
         # set current
@@ -88,34 +101,30 @@ class DataStore:
 
         # Now fill in remaining bits - have to notice escape character.
         self.__set_current()
-        if remaining_bits >= 8:
+        if remaining_bits > 8:
             remaining_bits -= 8
             retval |= self.__current << remaining_bits 
             self.__set_current()
 
         retval |= self.__current >> (8 - remaining_bits)
         self.__bit_offset = remaining_bits
-        if (self.__bit_offset == 8): # we have read the whole current byte
-            self.__bit_offset = 0
-            self.__set_current()
+        # if (self.__bit_offset == 8): # we have read the whole current byte
+        #     self.__bit_offset = 0
+        #     print('CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC')
+        #     self.__set_current()
         return retval
 
     def __set_current(self):
-        if self.__empty:
-            return
+#        print('Advancing')
         self.__byte_offset += 1
         self.__current = self.__processEscape()
-        self.__empty = (len(self.data) <= 1 + self.__byte_offset)
 
     def __processEscape(self):
         retval = self.data[self.__byte_offset]
-        if retval == ord('|'):
-            self.__byte_offset += 1
-            retval = self.data[self.__byte_offset] + 10
-        return retval
-
-    def isEmpty(self):
-        return self.__empty
+        if self.__streamed or retval != ord('|'):
+            return retval
+        self.__byte_offset += 1
+        return self.data[self.__byte_offset] + 10
 
 class Saver:
     def __init__(self, buffer):
@@ -128,12 +137,17 @@ class ImageSaver(Saver):
         self.__buffer = [0,0,0]
         self.__colorCount = 0
     def add(self, extra):
+#        print('Extra', extra[0], ' Len:', len(extra))
         for index in range(len(extra)):
+#            print ('Index:', index)
             self.__buffer[self.__colorCount] = extra[index]
+#            print('Decoded', extra[index], ' at index:', index)
+#            print('Colors: ', self.__buffer)
             self.__colorCount += 1
             if self.__colorCount == 3:
                 # TO_DO
                 self.data[self.outCount] = self.__buffer.copy() # Do I need to copy Here?  I hope not!
+#                print(self.outCount, ' ', self.data[self.outCount])
                 self.outCount += 1
                 self.__colorCount = 0
         
@@ -180,6 +194,8 @@ class Coder:
         retval = bytearray([code]) + retval
         return retval
         #return self.decode(int.from_bytes(val[0:2],'big')) + val[2:]
+    def getKeySize(self):
+        return self.__keySize
     def getAndUpdateKeySize(self):
         if self.__n_keys == 1 << self.__keySize :
             self.__keySize += 1
@@ -193,17 +209,18 @@ class Uncompressor:
         self.ds = dataStore
 
     def uncompressNext(self, ch):
-        assert(ch != '|') # A data store cannot end with an escape character.
-        self.ds.addToStore(ch)
-        self.uncompressData()
+#        print('Uncompress Next Byte:', ch)
+        self.ds.setStoreToByte(ch)
+        self.uncompressBytes()
 
     def uncompressFirst(self):
         code = self.ds.getFirst()
         self.previous = self.keyCodes.decode(code)
         self.saver.add(self.previous)
     def uncompressBytes(self):
-        while not self.ds.isEmpty():
-            code = self.ds.getNext(self.keyCodes.getAndUpdateKeySize())
+        while self.ds.hasNextCode(self.keyCodes.getAndUpdateKeySize()):
+            code = self.ds.getNext(self.keyCodes.getKeySize())
+#            print('code ' + hex(code)[2:] + ' (' + str(self.keyCodes.getKeySize()) + ')')
             try:
                 current = self.keyCodes.decode(code)
             except KeyError:
@@ -212,26 +229,22 @@ class Uncompressor:
             self.keyCodes.add(self.previous, current[:1])
             self.previous = current
 
-# Now uses adaptive length.
 def decompress(data, uncompressed):
     uc = Uncompressor(DataSaver(uncompressed), Coder([None] * len(data)), DataStore(data))
     uc.uncompressFirst()
     uc.uncompressBytes()
 
-# Now uses adaptive length.
 def decompressImage(data, image):
     uc = Uncompressor(ImageSaver(image), Coder([None] * len(data)), DataStore(data))
     uc.uncompressFirst()
     uc.uncompressBytes()
 
-def decompressImageStart(image, compressTable):
-    return Uncompressor(ImageSaver(image), Coder(compressTable))
+def decompressImageStart(image, compressTable, recvd):
+    uc = Uncompressor(ImageSaver(image), Coder(compressTable), DataStore(recvd, streamed = True))
+    uc.uncompressFirst()
+    return uc
 
 # Deals with escapes outside
-def decompressImageProcess(uc, recvd, first=True):
-    assert(recvd != '|')
-    if first:
-        uc.uncompressFirst(recvd)
-        uc.setDataStore(DataStore(), None)
-    else:
-        uc.uncompressNext(recvd)
+def decompressImageProcess(uc, recvd):
+    print('Process called for: ', recvd)
+    uc.uncompressNext(recvd)
