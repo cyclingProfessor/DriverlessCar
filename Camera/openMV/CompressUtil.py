@@ -185,24 +185,6 @@ class Coder:
             self.__keySize += 1
         return self.__keySize
  
-# Now uses adaptive length.
-def uncompress(data, saver):
-    # First saving - do not keep the dictionary for codes up to 255.
-    ds = DataStore(data)
-    keyCodes = Coder([None] * len(data))
-    code = ds.getFirst()
-    previous = keyCodes.decode(code)
-    saver.add(previous)
-    while not ds.isEmpty():
-        code = ds.getNext(keyCodes.getAndUpdateKeySize())
-        try:
-            current = keyCodes.decode(code)
-        except KeyError:
-            current = previous + previous[:1]
-        saver.add(current)
-        keyCodes.add(previous, current[:1])
-        previous = current
-
 class Uncompressor:
     def __init__(self, svr, coder, dataStore):
         self.saver = svr
@@ -216,10 +198,10 @@ class Uncompressor:
         self.uncompressData()
 
     def uncompressFirst(self):
-        code = ds.getFirst()
-        self.previous = code
+        code = self.ds.getFirst()
+        self.previous = self.keyCodes.decode(code)
         self.saver.add(self.previous)
-    def __uncompressBytes(self):
+    def uncompressBytes(self):
         while not self.ds.isEmpty():
             code = self.ds.getNext(self.keyCodes.getAndUpdateKeySize())
             try:
@@ -232,23 +214,15 @@ class Uncompressor:
 
 # Now uses adaptive length.
 def decompress(data, uncompressed):
-    uncompress(data, DataSaver(uncompressed))
-    # uc = Uncompressor(DataSaver(uncompressed), Coder([None] * len(data)))
-    # if data[0] == ord('|'):
-    #     data[1] += 10
-    #     data = data[1:]
-    # uc.uncompressFirst(data[:1])
-    # uc.uncompressBytes(DataStore(data[1:]))
+    uc = Uncompressor(DataSaver(uncompressed), Coder([None] * len(data)), DataStore(data))
+    uc.uncompressFirst()
+    uc.uncompressBytes()
 
 # Now uses adaptive length.
 def decompressImage(data, image):
-    uncompress(data, ImageSaver(image))
-    # uc = Uncompressor(ImageSaver(image), Coder([None] * len(data)))
-    # if data[0] == ord('|'):
-    #     data[1] += 10
-    #     data = data[1:]
-    # uc.uncompressFirst(data[:1])
-    # uc.uncompressBytes(DataStore(data))
+    uc = Uncompressor(ImageSaver(image), Coder([None] * len(data)), DataStore(data))
+    uc.uncompressFirst()
+    uc.uncompressBytes()
 
 def decompressImageStart(image, compressTable):
     return Uncompressor(ImageSaver(image), Coder(compressTable))
