@@ -108,10 +108,6 @@ class DataStore:
 
         retval |= self.__current >> (8 - remaining_bits)
         self.__bit_offset = remaining_bits
-        # if (self.__bit_offset == 8): # we have read the whole current byte
-        #     self.__bit_offset = 0
-        #     print('CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC')
-        #     self.__set_current()
         return retval
 
     def __set_current(self):
@@ -173,24 +169,34 @@ class Coder:
 #        print('Adding:<' + str(prev) + ':' + str(letter) + '>')
         for extra in prev[1:]:
             lookup = (256 * code + extra).to_bytes(3, 'big')
-            code = self.__keys.index(lookup) + 256
+#            print('Starting')
+            for offset in range(0, 3 * (self.__n_keys - 256), 3):
+                if self.__keys[offset: offset + 3] == lookup:
+#                    print('Found')
+                    code = offset // 3 + 256
+                    break;
+            #code = self.__keys.index(lookup) + 256
+#        print('Extra letter is: ', letter)
         iletter = letter[0]
         num = 256 * code + iletter
         val = num.to_bytes(3, 'big')
-        self.__keys[self.__n_keys - 256] = val
-#        print('Added ' + str(self.__keys[self.__n_keys - 256]) + ' at index ' + str(self.__n_keys))
+        offset = 3 * (self.__n_keys - 256)
+        self.__keys[offset: offset + 3] = val
+#        print('Added ', self.__keys[offset], self.__keys[offset + 1], self.__keys[offset + 2], ' at index ' + str(self.__n_keys))
         self.__n_keys += 1
     def decode(self, code):
-#        print('Decoding' + str(code))
+#        print('Decoding' + hex(code)[2:])
         if code < 256:
+#            print('Simple decoding')
             return code.to_bytes(1, 'big')
         retval = bytearray()
         while code >= 256:
-            val = self.__keys[code - 256]
-            if val == None:
+            if code >= self.__n_keys:
                 raise KeyError()
-            retval = bytearray(val[2:]) + retval 
-            code = int.from_bytes(val[0:2],'big')
+
+            val = self.__keys[3 * (code - 256): 3 * (code - 255)] # should copy in place if possible
+            retval = val[2:] + retval 
+            code = int.from_bytes(val[:2],'big')
         retval = bytearray([code]) + retval
         return retval
         #return self.decode(int.from_bytes(val[0:2],'big')) + val[2:]
@@ -223,6 +229,7 @@ class Uncompressor:
 #            print('code ' + hex(code)[2:] + ' (' + str(self.keyCodes.getKeySize()) + ')')
             try:
                 current = self.keyCodes.decode(code)
+#                print('Current:', current)
             except KeyError:
                 current = self.previous + self.previous[:1]
             self.saver.add(current)
@@ -230,12 +237,12 @@ class Uncompressor:
             self.previous = current
 
 def decompress(data, uncompressed):
-    uc = Uncompressor(DataSaver(uncompressed), Coder([None] * len(data)), DataStore(data))
+    uc = Uncompressor(DataSaver(uncompressed), Coder(bytearray(3 * len(data))), DataStore(data))
     uc.uncompressFirst()
     uc.uncompressBytes()
 
 def decompressImage(data, image):
-    uc = Uncompressor(ImageSaver(image), Coder([None] * len(data)), DataStore(data))
+    uc = Uncompressor(ImageSaver(image), Coder(bytearray(3 * len(data))), DataStore(data))
     uc.uncompressFirst()
     uc.uncompressBytes()
 

@@ -99,7 +99,7 @@ class TestReader(unittest.TestCase):
             firstArg[2] = code[offset] + 10
         offset += 1
 
-        uc = decompressImageStart(image, [None] * len(data), firstArg)
+        uc = decompressImageStart(image, bytearray(3 * len(data)), firstArg)
         addition = 0
         for ch in code[offset:]:
             if ch == ord('|'):

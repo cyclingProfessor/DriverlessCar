@@ -67,7 +67,7 @@ class TestReader(unittest.TestCase):
         for index in range(7):
             rdr.handleChar(input1[index])
         rdr.handleChar('X')
-        self.assertEqual(rdr.getStatus(), MSG_GOOD)
+        self.assertEqual(rdr.getStatus(), MSG_BAD)
         self.assertEqual(rdr._state, myStateWaiting)
     def test_Count_Recover(self):
         rdr = Reader()

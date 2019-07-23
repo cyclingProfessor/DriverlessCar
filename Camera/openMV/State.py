@@ -1,5 +1,5 @@
 import image, sensor
-from CompressUtil import decompressImage
+from CompressUtil import decompressImageStart, Uncompressor
 
 START = '{' # 123
 END = '}' # 125
@@ -20,7 +20,7 @@ class Message:
         self.dataCount = 0
         self.expected = -1
         self.picture = image.Image(60,40,sensor.RGB565)
-        self.decompressTable = bytearray(3000)
+        self.decompressTable = bytearray(1000)
 
 ######################################################################################
 
@@ -50,7 +50,7 @@ class StateImageReader(State):
             rdr._state = myStateWaiting
             return
         # The first two bytes are big endian 6-bit Data (compressed) counts.
-        if not self.started == 0:
+        if not self.started:
             self.message.expected = ord(recvd)
             self.started = True
             return
@@ -65,20 +65,41 @@ class StateImageReader(State):
             self.message.status = MSG_BAD
             rdr._state = myStateWaiting
             return
-        decompressImageInit(self.message.picture, self.message.decompressTable)
         rdr._state = myReadPixels
+        myReadPixels.begin()
 
 class StateReadPixels(State):
     def __init__(self):
         super().__init__()
         self._name = "Pixel Reader"
+        self._buffer = bytearray(3)
+        self._uc = None
+        self.__escaped = False
+    def begin(self):
+        self.__escaped = False
     def handleChar(self, rdr, recvd):
         if recvd in [END, START]: # Only two bad characters! premature!
             print(self._name + " - got Bad:" + str(recvd))
             self.message.status = MSG_BAD
             rdr._state = myStateWaiting
             return
-        decompressImageProcess(recvd)
+        val = ord(recvd)
+        if self.__escaped:
+            val += 10
+            self.__escaped = False
+        elif recvd == '|':
+            # wait until next character
+            self.message.dataCount += 1
+            self.__escaped = True
+            return
+
+        if self.message.dataCount < 3: # build up initial buffer
+            self._buffer[self.message.dataCount] = val
+            if self.message.dataCount == 2:
+                self._uc = decompressImageStart(self.message.picture, self.message.decompressTable, self._buffer)
+        else:
+            self._uc.uncompressNext(val)
+
         self.message.dataCount += 1
         if self.message.dataCount == self.message.expected:
             rdr._state = myStateEnd
@@ -180,6 +201,9 @@ class Reader:
 
     def getStatus(self):
         return self._state.message.status
+
+    def getMessage(self):
+        return self._state.message;
 
     def handleChar(self, recvd):
         self._state.handleChar(self, recvd)
