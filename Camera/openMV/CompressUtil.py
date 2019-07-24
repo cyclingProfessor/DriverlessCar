@@ -1,5 +1,6 @@
 # Untitled - By: dave - Wed Jul 10 2019
 from math import floor, ceil
+# from pyb import millis
 import gc
 
 def compress(data) -> bytes:
@@ -62,13 +63,18 @@ class DataStore:
         self.__byte_offset = 0
         self.__bit_offset = 0
         self.__streamed = streamed
+	# For profiling
+        # self.getNextTime = 0
+        # self.storeByteTime = 0
 
     def setStoreToByte(self, ch):
         # Add next character to the end of the array
+        # start = millis()
         for index in range(2):
             self.data[0 + index] = self.data[1 + index]
         self.data[2] = ch
         self.__byte_offset -= 1
+        # self.storeByteTime += millis() - start
 
     def getFirst(self):
 #        print('Initial data bytes', self.data[0], self.data[1])
@@ -91,6 +97,7 @@ class DataStore:
 
     def getNext(self, key_size):
         # set current
+        # start = millis()
         assert(key_size >= 8 and key_size < 16)
         # We need key_size bits (at most 10) so collect from at most two bytes
         # First part
@@ -108,6 +115,7 @@ class DataStore:
 
         retval |= self.__current >> (8 - remaining_bits)
         self.__bit_offset = remaining_bits
+        # self.getNextTime += millis() - start
         return retval
 
     def __set_current(self):
@@ -132,8 +140,10 @@ class ImageSaver(Saver):
         super().__init__(img)
         self.__buffer = [0,0,0]
         self.__colorCount = 0
+        self._totalL = 0
     def add(self, extra):
-#        print('Extra', extra[0], ' Len:', len(extra))
+        self._totalL += len(extra)
+#        print('Extra', extra[0], 'T Len:', self._totalL)
         for index in range(len(extra)):
 #            print ('Index:', index)
             self.__buffer[self.__colorCount] = extra[index]
@@ -141,8 +151,7 @@ class ImageSaver(Saver):
 #            print('Colors: ', self.__buffer)
             self.__colorCount += 1
             if self.__colorCount == 3:
-                # TO_DO
-                self.data[self.outCount] = self.__buffer.copy() # Do I need to copy Here?  I hope not!
+                self.data[self.outCount] = self.__buffer.copy()
 #                print(self.outCount, ' ', self.data[self.outCount])
                 self.outCount += 1
                 self.__colorCount = 0
@@ -157,49 +166,39 @@ class DataSaver(Saver):
 class Coder:
     def __init__(self, table):
         self.__keys = table
-#        print (len(table))
         self.__n_keys = 256
         self.__keySize = 8
-        # self.keys = [] # array indexed by code: 2byte code, 1 byte letter (stored as bytes())
-    def add(self, prev, letter):
-        # prev is the bytes representation of an element of the keys array - we now find it.
-        # Find first character as Code (code is an integer)
-        # while next letter L in prev, set Code to the entry for 'Code:L'
-        code = prev[0]
-#        print('Adding:<' + str(prev) + ':' + str(letter) + '>')
-        for extra in prev[1:]:
-            lookup = (256 * code + extra).to_bytes(3, 'big')
-#            print('Starting')
-            for offset in range(0, 3 * (self.__n_keys - 256), 3):
-                if self.__keys[offset: offset + 3] == lookup:
-#                    print('Found')
-                    code = offset // 3 + 256
-                    break;
-            #code = self.__keys.index(lookup) + 256
-#        print('Extra letter is: ', letter)
-        iletter = letter[0]
+        self.__decodeBuffer = bytearray(100)
+	# For profiling
+        # self.decodingTime = 0
+        # self.addTime = 0
+    def add(self, code, iletter):
+        # start = millis()
         num = 256 * code + iletter
         val = num.to_bytes(3, 'big')
         offset = 3 * (self.__n_keys - 256)
         self.__keys[offset: offset + 3] = val
-#        print('Added ', self.__keys[offset], self.__keys[offset + 1], self.__keys[offset + 2], ' at index ' + str(self.__n_keys))
         self.__n_keys += 1
-    def decode(self, code):
-#        print('Decoding' + hex(code)[2:])
+        # self.addTime += millis() - start
+    def decode(self, code, buffer):
+        # print('Decoding' + hex(code)[2:])
+        # start = millis()
         if code < 256:
 #            print('Simple decoding')
             return code.to_bytes(1, 'big')
-        retval = bytearray()
+        retval = -1
         while code >= 256:
             if code >= self.__n_keys:
                 raise KeyError()
-
-            val = self.__keys[3 * (code - 256): 3 * (code - 255)] # should copy in place if possible
-            retval = val[2:] + retval 
-            code = int.from_bytes(val[:2],'big')
-        retval = bytearray([code]) + retval
-        return retval
-        #return self.decode(int.from_bytes(val[0:2],'big')) + val[2:]
+            self.__decodeBuffer[retval] = self.__keys[3 * (code - 256) + 2]
+            retval -= 1
+            code = int.from_bytes(self.__keys[3 * (code - 256):3 * (code - 256) + 2],'big')
+        self.__decodeBuffer[retval] = code
+        # self.decodingTime += millis() - start
+        # print(millis(), ' ', millis() - start, ' Decoding Finished' + hex(code)[2:])
+        return self.__decodeBuffer[retval:100]
+    def getNumKeys(self):
+        return self.__n_keys
     def getKeySize(self):
         return self.__keySize
     def getAndUpdateKeySize(self):
@@ -212,29 +211,43 @@ class Uncompressor:
         self.saver = svr
         self.keyCodes = coder
         self.previous = None
+        self.prevCode = None
         self.ds = dataStore
+	# For profiling
+        # self.uncompressNextTime = 0
+        # self.uncompressBytesTime = 0
+        # self.currentIndex = 0
+        # self.buffer = (bytearray(100), bytearray(100))
 
     def uncompressNext(self, ch):
 #        print('Uncompress Next Byte:', ch)
+        # start = millis()
         self.ds.setStoreToByte(ch)
         self.uncompressBytes()
+        # self.uncompressNextTime += millis() - start
 
     def uncompressFirst(self):
         code = self.ds.getFirst()
         self.previous = self.keyCodes.decode(code)
+        self.prevCode = code
         self.saver.add(self.previous)
     def uncompressBytes(self):
+        # start = millis()
         while self.ds.hasNextCode(self.keyCodes.getAndUpdateKeySize()):
             code = self.ds.getNext(self.keyCodes.getKeySize())
 #            print('code ' + hex(code)[2:] + ' (' + str(self.keyCodes.getKeySize()) + ')')
             try:
                 current = self.keyCodes.decode(code)
+                self.keyCodes.add(self.prevCode, current[0])
+                self.prevCode = code
 #                print('Current:', current)
             except KeyError:
                 current = self.previous + self.previous[:1]
+                self.keyCodes.add(self.prevCode, current[0])
+                self.prevCode = self.keyCodes.getNumKeys() - 1
             self.saver.add(current)
-            self.keyCodes.add(self.previous, current[:1])
             self.previous = current
+        # self.uncompressBytesTime += millis() - start
 
 def decompress(data, uncompressed):
     uc = Uncompressor(DataSaver(uncompressed), Coder(bytearray(3 * len(data))), DataStore(data))
