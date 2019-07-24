@@ -138,30 +138,24 @@ class Saver:
 class ImageSaver(Saver):
     def __init__(self, img):
         super().__init__(img)
-        self.__buffer = [0,0,0]
+        self.__colorBuffer = [0,0,0]
         self.__colorCount = 0
-        self._totalL = 0
-    def add(self, extra):
-        self._totalL += len(extra)
-#        print('Extra', extra[0], 'T Len:', self._totalL)
-        for index in range(len(extra)):
-#            print ('Index:', index)
-            self.__buffer[self.__colorCount] = extra[index]
-#            print('Decoded', extra[index], ' at index:', index)
-#            print('Colors: ', self.__buffer)
+    def add(self, colors, length):
+        for index in range(length):
+            self.__colorBuffer[self.__colorCount] = colors[-length + index]
             self.__colorCount += 1
             if self.__colorCount == 3:
-                self.data[self.outCount] = self.__buffer.copy()
-#                print(self.outCount, ' ', self.data[self.outCount])
+                self.data[self.outCount] = self.__colorBuffer.copy()
                 self.outCount += 1
                 self.__colorCount = 0
         
 class DataSaver(Saver):
     def __init__(self, data):
         super().__init__(data)
-    def add(self, extra):
-        self.data[self.outCount: self.outCount + len(extra)] = extra
-        self.outCount += len(extra)
+    def add(self, buffer, length):
+        # offset is negative so actually gives the number of bytes to store
+        self.data[self.outCount: self.outCount + length] = buffer[-length:]
+        self.outCount += length
 
 class Coder:
     def __init__(self, table):
@@ -184,19 +178,19 @@ class Coder:
         # print('Decoding' + hex(code)[2:])
         # start = millis()
         if code < 256:
-#            print('Simple decoding')
-            return code.to_bytes(1, 'big')
+            buffer[-1] = code
+            return -1
         retval = -1
         while code >= 256:
             if code >= self.__n_keys:
                 raise KeyError()
-            self.__decodeBuffer[retval] = self.__keys[3 * (code - 256) + 2]
+            buffer[retval] = self.__keys[3 * (code - 256) + 2]
             retval -= 1
             code = int.from_bytes(self.__keys[3 * (code - 256):3 * (code - 256) + 2],'big')
-        self.__decodeBuffer[retval] = code
+        buffer[retval] = code
         # self.decodingTime += millis() - start
         # print(millis(), ' ', millis() - start, ' Decoding Finished' + hex(code)[2:])
-        return self.__decodeBuffer[retval:100]
+        return retval
     def getNumKeys(self):
         return self.__n_keys
     def getKeySize(self):
@@ -213,6 +207,7 @@ class Uncompressor:
         self.previous = None
         self.prevCode = None
         self.ds = dataStore
+        self.buffer = bytearray(100)
 	# For profiling
         # self.uncompressNextTime = 0
         # self.uncompressBytesTime = 0
@@ -228,25 +223,27 @@ class Uncompressor:
 
     def uncompressFirst(self):
         code = self.ds.getFirst()
-        self.previous = self.keyCodes.decode(code)
+        self.previous = [code]
         self.prevCode = code
-        self.saver.add(self.previous)
+        self.saver.add(self.previous, 1)
+
     def uncompressBytes(self):
         # start = millis()
         while self.ds.hasNextCode(self.keyCodes.getAndUpdateKeySize()):
             code = self.ds.getNext(self.keyCodes.getKeySize())
 #            print('code ' + hex(code)[2:] + ' (' + str(self.keyCodes.getKeySize()) + ')')
             try:
-                current = self.keyCodes.decode(code)
-                self.keyCodes.add(self.prevCode, current[0])
+                currentOffset = self.keyCodes.decode(code, self.buffer)
+                self.keyCodes.add(self.prevCode, self.buffer[currentOffset])
                 self.prevCode = code
 #                print('Current:', current)
             except KeyError:
-                current = self.previous + self.previous[:1]
-                self.keyCodes.add(self.prevCode, current[0])
+                currentOffset = -1 * len(self.previous) - 1
+                self.buffer[currentOffset:] = self.previous + self.previous[:1]
+                self.keyCodes.add(self.prevCode, self.buffer[currentOffset])
                 self.prevCode = self.keyCodes.getNumKeys() - 1
-            self.saver.add(current)
-            self.previous = current
+            self.saver.add(self.buffer, -currentOffset)
+            self.previous = self.buffer[currentOffset:]
         # self.uncompressBytesTime += millis() - start
 
 def decompress(data, uncompressed):
