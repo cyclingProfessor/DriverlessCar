@@ -30,6 +30,7 @@ bool readFile(File fp) {
   image.height = fp.read();
   image.data = new unsigned char[image.len];
   Serial1.print("The Image has width:"); Serial1.print(image.width); Serial1.print(" and height:"); Serial1.println(image.height);
+  fp.seek(31);
   if (fp.read(image.data, image.len) != image.len) {
     delete image.data;
     return false;
@@ -61,8 +62,6 @@ void setup()
   if (readFile(imFile)) {
     sendNext('{');
     sendNext('P');
-    sendNext(image.width);
-    sendNext(image.height);
     sendNext((image.len >> 6) & 0x3F); // Max 12 bits length sent.
     sendNext(image.len & 0x3F);
 
