@@ -1,5 +1,5 @@
 import image, sensor
-from CompressUtil import decompressImageStart, Uncompressor
+from CompressUtil import decompressImageStart, Uncompressor, DataStore
 
 START = '{' # 123
 END = '}' # 125
@@ -97,11 +97,11 @@ class StateReadPixels(State):
         if self.message.dataCount < 3: # build up initial buffer
             self._buffer[self.message.dataCount] = val
             if self.message.dataCount == 2:
-                self._ds = DataStore(firstArg, streamed = True)
-                self._uc = decompressImageStart(self.message.picture, self.message.decompressTable, ds)
+                self._ds = DataStore(self._buffer, streamed = True)
+                self._uc = decompressImageStart(self.message.picture, self.message.decompressTable, self._ds)
         else:
-            self.ds.setStoreToByte(val)
-            self.uc.uncompressBytes()
+            self._ds.setStoreToByte(val)
+            self._uc.uncompressBytes()
 
         self.message.dataCount += 1
         if self.message.dataCount == self.message.expected:
