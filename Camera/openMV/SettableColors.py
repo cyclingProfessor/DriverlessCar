@@ -57,7 +57,6 @@ uart = UART(3, 460800)
 threshold = [0, 100, -128, 127, -128, 127]
 reportMode = False
 showImage = False
-message = Message()
 
 ##########################################################################
 # MAIN CODE
@@ -74,6 +73,7 @@ sensor.set_auto_whitebal(False) # must be turned off for color tracking
 lcd.init() # Initialize the lcd screen.
 
 rdr = Reader()
+message = rdr.getMessage()
 msgStatus = statusOkay
 
 while(True):
