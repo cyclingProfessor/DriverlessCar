@@ -1,6 +1,6 @@
 # Untitled - By: dave - Wed Jul 10 2019
 from math import floor, ceil
-# from pyb import millis
+from pyb import millis
 import gc
 
 def compress(data) -> bytes:
@@ -67,6 +67,7 @@ class DataStore:
         # self.getNextTime = 0
         # self.storeByteTime = 0
 
+#    @micropython.native
     def setStoreToByte(self, ch):
         # Add next character to the end of the array
         # start = millis()
@@ -77,12 +78,14 @@ class DataStore:
         # self.storeByteTime += millis() - start
 
     def getFirst(self):
-#        print('Initial data bytes', self.data[0], self.data[1])
+        # print('Initial data bytes', self.data[0], self.data[1])
         retval = self.__processEscape() # The first byte
+        # print(retval)
         self.__set_current() # increments __byte_offset and Sets __current to the (second) data byte
 #        print(self.__byte_offset)
         return retval
 
+#    @micropython.native
     def hasNextCode(self, key_size):
         # Here we count bytes that are beyond the .__byteCount index in .data to make sure that
         if self.__streamed:
@@ -95,6 +98,7 @@ class DataStore:
 #        print('    Answer:', remaining_bits <= 0)
         return remaining_bits <= 0
 
+#    @micropython.native
     def getNext(self, key_size):
         # set current
         # start = millis()
@@ -134,20 +138,30 @@ class Saver:
     def __init__(self, buffer):
         self.data = buffer
         self.outCount = 0
+        # self.addTime = 0
 
 class ImageSaver(Saver):
     def __init__(self, img):
         super().__init__(img)
         self.__colorBuffer = [0,0,0]
         self.__colorCount = 0
+#    @micropython.native
     def add(self, colors, length):
+        # start = millis()
+        cptr = self.__colorBuffer
+        dt = self.data
+        oc = self.outCount
+        cc = self.__colorCount
         for index in range(length):
-            self.__colorBuffer[self.__colorCount] = colors[-length + index]
-            self.__colorCount += 1
-            if self.__colorCount == 3:
-                self.data[self.outCount] = self.__colorBuffer.copy()
-                self.outCount += 1
-                self.__colorCount = 0
+            cptr[cc] = colors[-length + index]
+            cc += 1
+            if cc == 3:
+                dt[oc] = cptr.copy()
+                oc += 1
+                cc = 0
+        self.__colorCount = cc
+        self.outCount = oc
+        # self.addTime += millis() - start
         
 class DataSaver(Saver):
     def __init__(self, data):
@@ -168,25 +182,26 @@ class Coder:
         # self.addTime = 0
     def add(self, code, iletter):
         # start = millis()
-        num = 256 * code + iletter
-        val = num.to_bytes(3, 'big')
         offset = 3 * (self.__n_keys - 256)
-        self.__keys[offset: offset + 3] = val
+        kys = self.__keys
+        kys[offset] = code >> 8
+        kys[offset + 1] = (code & 255)
+        kys[offset + 2] = iletter
         self.__n_keys += 1
         # self.addTime += millis() - start
+#    @micropython.native
     def decode(self, code, buffer):
         # print('Decoding' + hex(code)[2:])
         # start = millis()
-        if code < 256:
-            buffer[-1] = code
-            return -1
+        kys = self.__keys
         retval = -1
         while code >= 256:
+            c_code = 3 * (code - 256)
             if code >= self.__n_keys:
-                raise KeyError()
-            buffer[retval] = self.__keys[3 * (code - 256) + 2]
+                return 0 # indicates fail
+            buffer[retval] = kys[c_code + 2]
             retval -= 1
-            code = int.from_bytes(self.__keys[3 * (code - 256):3 * (code - 256) + 2],'big')
+            code = (kys[c_code] << 8) + kys[c_code + 1] 
         buffer[retval] = code
         # self.decodingTime += millis() - start
         # print(millis(), ' ', millis() - start, ' Decoding Finished' + hex(code)[2:])
@@ -204,46 +219,52 @@ class Uncompressor:
     def __init__(self, svr, coder, dataStore):
         self.saver = svr
         self.keyCodes = coder
-        self.previous = None
+        self.previousOffset = -1
+        self.current = 0
         self.prevCode = None
         self.ds = dataStore
-        self.buffer = bytearray(100)
+        self.buffer = (bytearray(100), bytearray(100))
 	# For profiling
-        # self.uncompressNextTime = 0
         # self.uncompressBytesTime = 0
         # self.currentIndex = 0
-        # self.buffer = (bytearray(100), bytearray(100))
-
-    def uncompressNext(self, ch):
-#        print('Uncompress Next Byte:', ch)
-        # start = millis()
-        self.ds.setStoreToByte(ch)
-        self.uncompressBytes()
-        # self.uncompressNextTime += millis() - start
 
     def uncompressFirst(self):
         code = self.ds.getFirst()
-        self.previous = [code]
+        # print('code ' + hex(code)[2:] + ' (' + str(self.keyCodes.getKeySize()) + ')')
+        self.buffer[1][-1] = code
         self.prevCode = code
-        self.saver.add(self.previous, 1)
+        self.saver.add(self.buffer[1], 1)
 
     def uncompressBytes(self):
         # start = millis()
         while self.ds.hasNextCode(self.keyCodes.getAndUpdateKeySize()):
+            buff = self.buffer[self.current]
+            prev = self.buffer[1 - self.current]
             code = self.ds.getNext(self.keyCodes.getKeySize())
-#            print('code ' + hex(code)[2:] + ' (' + str(self.keyCodes.getKeySize()) + ')')
-            try:
-                currentOffset = self.keyCodes.decode(code, self.buffer)
-                self.keyCodes.add(self.prevCode, self.buffer[currentOffset])
+            # print('code ' + hex(code)[2:] + ' (' + str(self.keyCodes.getKeySize()) + ')')
+            if code < 256:
+                buff[-1] = code
+                current = -1
+            else:
+                current = self.keyCodes.decode(code, buff)
+            if current < 0:
+                self.keyCodes.add(self.prevCode, buff[current])
                 self.prevCode = code
 #                print('Current:', current)
-            except KeyError:
-                currentOffset = -1 * len(self.previous) - 1
-                self.buffer[currentOffset:] = self.previous + self.previous[:1]
-                self.keyCodes.add(self.prevCode, self.buffer[currentOffset])
+            else:
+                # print('Decoding an unseen code:', code, ', Maximum so far is:', self.keyCodes.getNumKeys() - 1)
+                # print(self.previous, self.previousOffset)
+                # print('Previous Decode:', self.previous[self.previousOffset:])
+                # print('Extra character:', self.previous[self.previousOffset])
+                current = self.previousOffset - 1
+                buff[current:-1] = prev[self.previousOffset:]
+                buff[-1] = prev[self.previousOffset]
+                # print('Decoded as:', buff[current:])
+                self.keyCodes.add(self.prevCode, buff[current])
                 self.prevCode = self.keyCodes.getNumKeys() - 1
-            self.saver.add(self.buffer, -currentOffset)
-            self.previous = self.buffer[currentOffset:]
+            self.saver.add(buff, -current)
+            self.current = 1 - self.current
+            self.previousOffset = current
         # self.uncompressBytesTime += millis() - start
 
 def decompress(data, uncompressed):
@@ -256,11 +277,7 @@ def decompressImage(data, image):
     uc.uncompressFirst()
     uc.uncompressBytes()
 
-def decompressImageStart(image, compressTable, recvd):
-    uc = Uncompressor(ImageSaver(image), Coder(compressTable), DataStore(recvd, streamed = True))
+def decompressImageStart(image, compressTable, store):
+    uc = Uncompressor(ImageSaver(image), Coder(compressTable), store)
     uc.uncompressFirst()
     return uc
-
-# Deals with escapes outside
-def decompressImageProcess(uc, recvd):
-    uc.uncompressNext(recvd)

@@ -19,8 +19,8 @@ class Message:
         self.status = MSG_NONE # -2 for None yet, -1 for error, 0 for partial, 1 for complete
         self.dataCount = 0
         self.expected = -1
-        self.picture = image.Image(60,40,sensor.RGB565)
-        self.decompressTable = bytearray(1000)
+        self.picture = image.Image(50,44,sensor.RGB565)
+        self.decompressTable = bytearray(3000)
 
 ######################################################################################
 
@@ -74,6 +74,7 @@ class StateReadPixels(State):
         self._name = "Pixel Reader"
         self._buffer = bytearray(3)
         self._uc = None
+        self._ds = None
         self.__escaped = False
     def begin(self):
         self.__escaped = False
@@ -96,9 +97,11 @@ class StateReadPixels(State):
         if self.message.dataCount < 3: # build up initial buffer
             self._buffer[self.message.dataCount] = val
             if self.message.dataCount == 2:
-                self._uc = decompressImageStart(self.message.picture, self.message.decompressTable, self._buffer)
+                self._ds = DataStore(firstArg, streamed = True)
+                self._uc = decompressImageStart(self.message.picture, self.message.decompressTable, ds)
         else:
-            self._uc.uncompressNext(val)
+            self.ds.setStoreToByte(val)
+            self.uc.uncompressBytes()
 
         self.message.dataCount += 1
         if self.message.dataCount == self.message.expected:
