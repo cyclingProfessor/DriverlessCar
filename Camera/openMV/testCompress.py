@@ -13,7 +13,7 @@ class TestReader(unittest.TestCase):
     def test_Simple(self):
         data = b"ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ"
         code = compress(data)
- #       print(bin(int.from_bytes(code, 'big')))
+        # print(bin(int.from_bytes(code, 'big')))
         uncompressed = bytearray(len(data))
         decompress(code, uncompressed)
         self.assertSequenceEqual(data, uncompressed)
@@ -22,7 +22,7 @@ class TestReader(unittest.TestCase):
         seed(0)
         data = bytes(randrange(255) for i in range(10000))
         code = compress(data)
-        print('Length of compressed data', len(code))
+        # print('Length of compressed data', len(code))
         uncompressed = bytearray(len(data))
         decompress(code, uncompressed)
         self.assertSequenceEqual(data, uncompressed)
@@ -32,8 +32,34 @@ class TestReader(unittest.TestCase):
         data = fp.read()
         fp.close()
         code = compress(data)
+#        print(bin(int.from_bytes(code, 'big')))
         uncompressed = bytearray(len(data))
         decompress(code, uncompressed)
+        self.assertSequenceEqual(data, uncompressed)
+
+    def test_ImageFiles(self):
+        fp = open('IMAGE.ppm', 'rb')
+        fp.readline()
+        fp.readline()
+        sizes = fp.readline()
+        sz = bytes([int(s) for s in sizes.split() if s.isdigit()][0:2])
+        check = fp.readline().rstrip() # discard this line which should be 255\n
+        assert(check == b'255')
+        data = fp.read()
+        fp.close()
+        code = compress(data)
+        fp = open('IMAGE.ppm.Z', 'wb')
+        fp.write(code)
+        fp.close()
+        uncompressed = bytearray(len(data))
+
+        fp = open('IMAGE.ppm.Z', 'rb')
+        code = fp.read()
+        fp.close()
+        decompress(code, uncompressed)
+        fp = open('IMAGE.ppm.Z.u', 'wb')
+        fp.write(uncompressed)
+        fp.close()
         self.assertSequenceEqual(data, uncompressed)
 
     def test_Escape(self):
@@ -99,13 +125,15 @@ class TestReader(unittest.TestCase):
             firstArg[2] = code[offset] + 10
         offset += 1
 
-        uc = decompressImageStart(image, bytearray(3 * len(data)), firstArg)
+        ds = DataStore(firstArg, streamed = True)
+        uc = decompressImageStart(image, bytearray(3 * len(data)), ds)
         addition = 0
         for ch in code[offset:]:
             if ch == ord('|'):
                 addition = 10
                 continue
-            decompressImageProcess(uc, ch + addition)
+            ds.setStoreToByte(ch + addition)
+            uc.uncompressBytes()
             addition = 0
         self.assertSequenceEqual(data, [item for sublist in image for item in sublist])
 
