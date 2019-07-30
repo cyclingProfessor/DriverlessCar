@@ -35,6 +35,11 @@ bool readFile(File fp) {
     delete image.data;
     return false;
   }
+  for (int index = 0 ; index < 40; index++) {
+    Serial1.print(image.data[index]);
+    Serial1.print(" ");
+  }
+  Serial1.println();
   Serial1.println("Managed to read the payload for sending over to the camera");
   return true;
 }
@@ -67,7 +72,7 @@ void setup()
 
     bool keepGoing = true;
     int count = 0;
-    while (count < image.len) {
+    while (count < image.len && keepGoing) {
       keepGoing &= sendNext(image.data[count]);
       count++;
       Serial1.print(".");
