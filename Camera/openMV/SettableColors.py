@@ -101,6 +101,8 @@ while(True):
             reportMode = not reportMode;
         elif message.command == 'P': # Show image file on screen.
             print("Got a Piccy")
+            if showImage:
+                tim.deinit()
             showImage = True
             tim = Timer(4, freq=0.2)
             tim.callback(clearImage)
