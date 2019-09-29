@@ -111,7 +111,8 @@ MFRC522 mfrc522(NFC_SS_PIN, NFC_RST_PIN);   // Create MFRC522 instance.
 #define RIGHT 0
 #define LEFT 1
 #define REAR 2
-#define LONG_DISTANCE 1000
+char distCodes[] = {'R', 'L', 'B'};
+
 
 int echoPin[3] = {7,5,3};
 int triggerPin[3] = {6,4,2};
@@ -136,6 +137,22 @@ void pinger(void *data) {
 
 Timer triggerTimer(100, pinger, t_period, NULL );
 
+static int  saveRight = 0;
+static int  saveLeft = 0;
+static int  saveRear = 0;
+int distanceMessage(int dir, int current, int saved) {
+  if (abs(current - saved) > 100) {
+    Serial1.print("[E"); // E is for Echo.
+    Serial1.print(distCodes[dir]);
+    Serial1.print(current);
+    Serial1.print(']');
+  }
+  if (current < 1800) {
+    Serial5.write(dir != REAR ? 'F' : 'B');
+  }
+  return current;      
+}
+
 
 ///////////////////// Miscellaneous //////////////////////////////////////
 unsigned long lastTime = millis();
@@ -148,6 +165,11 @@ void setup() {
   Serial1.begin(115200);
   Serial5.begin(115200);
   Serial2.begin(460800);
+
+  // Wait for a connection - which can happen now or later.
+  while (Serial1.read() != '!') {
+  }
+  
   for (int index = 0 ; index < 3 ; index++) {
     pinMode(triggerPin[index], OUTPUT);
     pinMode(echoPin[index], INPUT);
@@ -179,6 +201,7 @@ void setup() {
     entry = dir.openNextFile();
   }
   lastTime = millis();
+  Serial1.println("Car Initialised");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -196,7 +219,7 @@ void loop() {
       Serial1.print("Camera Message: ");
       Serial1.println(cameraSuccess ? "Succeeded" : "Failed");
     } else {
-      if (motorControl.indexOf(next) != -1) {  
+      if (motorControl.indexOf(next) != -1) { // Simply ignore the (re-)connection !
         Serial1.write(next);  // Echo standard stuff ...
         Serial5.write(next);   // ... and send it to D1
       }
@@ -234,25 +257,11 @@ void loop() {
         Serial5.write(9 + (where - 160) * 6/140);        
       }
   }
-  if (duration[REAR] < 1800) {
-    if (!warnedRear) {
-      Serial.println("Danger Behind");
-      Serial5.write('B');
-      warnedRear = true;
-    }
-  } else {
-    warnedRear = false;
-  }
-  if (duration[RIGHT] < 1800 || duration[LEFT] < 1800) // Damn - obstacle.
-  {
-    if (!warnedFront) {
-      Serial.println("Danger in Front");
-      Serial5.write('F');
-      warnedFront = true;
-    }
-  } else {
-    warnedFront = false;
-  }
+
+  saveRight = distanceMessage(RIGHT, duration[RIGHT], saveRight);
+  saveLeft = distanceMessage(LEFT, duration[LEFT], saveLeft);
+  saveRear = distanceMessage(REAR, duration[REAR], saveRear);
+
 
   unsigned char *nextID = readCard();
   if (nextID != NULL && memcmp(currentID, nextID, 7)) {
@@ -282,7 +291,6 @@ void loop() {
 inline unsigned char *readCard() {
   if (!mfrc522.PICC_IsNewCardPresent()) return NULL;
   if (!mfrc522.PICC_ReadCardSerial()) return NULL;
-  mfrc522.PICC_DumpToSerial(&(mfrc522.uid));
   printUID(mfrc522.uid.uidByte);
 
   if (mfrc522.uid.size != 7) return NULL;
