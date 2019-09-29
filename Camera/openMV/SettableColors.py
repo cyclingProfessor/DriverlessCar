@@ -98,7 +98,7 @@ while(True):
             sensor.set_auto_gain(False)
             sensor.set_auto_whitebal(False)
         elif message.command == 'R': # Toggle report mode.
-            reportMode = not reportMode;
+            reportMode = (message.dataBuffer[0] == '1')
         elif message.command == 'P': # Show image file on screen.
             print("Got a Piccy")
             if showImage:
