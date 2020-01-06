@@ -1,8 +1,10 @@
 import sensor, image, lcd, time, utime
-from pyb import UART, LED, USB_VCP, Timer
+from pyb import UART, LED, USB_VCP, Timer, millis
 from State import Reader, MSG_GOOD, MSG_BAD, MSG_NONE, MSG_PARTIAL, Message
 from uos import stat
 from sys import exit
+from CompressUtil import *
+import gc
 
 # A message
 # START: CMD: Length: Data : End
@@ -37,8 +39,7 @@ def blobFind(statusDraw = None):
 
     if showImage:
         img.draw_image(message.picture, 20,20)
-    if statusDraw != None:
-        lcd.display(statusDraw(img))
+    lcd.display(statusDraw(img))
     return retval
 
 #########################################
@@ -57,7 +58,7 @@ uart = UART(3, 460800)
 #threshold = [64, 79, -49, -19, -28, -4] # Green Line
 threshold = [0, 100, -128, 127, -128, 127]
 reportMode = False
-showImage = False
+showImage = True
 
 ##########################################################################
 # MAIN CODE
@@ -73,8 +74,51 @@ sensor.set_auto_whitebal(False) # must be turned off for color tracking
 
 lcd.init() # Initialize the lcd screen.
 
+print('Used: ' + str(gc.mem_alloc()) + ' Free: ' + str(gc.mem_free()))
+
 rdr = Reader()
 message = rdr.getMessage()
+
+print('Used: ' + str(gc.mem_alloc()) + ' Free: ' + str(gc.mem_free()))
+fp = open('04E68AFA904980.ppm.Z', 'rb')
+buffP = fp.read()
+fp.close()
+count = 0
+
+buffer = bytearray(3)
+for index in range(3):
+    buffer[index] = buffP[count]
+    count = count + 1
+    if buffer[index] == ord('|'):
+        buffer[index] = buffP[count] + 10
+        count += 1
+
+ds = DataStore(buffer, streamed = True)
+uc = decompressImageStart(message.picture, message.decompressTable, ds)
+start = millis()
+print('Started', millis())
+
+while count < len(buffP):
+    val = buffP[count]
+    count += 1
+    if val == ord('|'):
+        val = buffP[count] + 10
+        count += 1
+    print(val)
+    ds.setStoreToByte(val)
+    uc.uncompressBytes()
+
+# print('Uncompressor: uncompressBytes total time:', uc.uncompressBytesTime)
+# print('Coder: Decoding total time:', uc.keyCodes.decodingTime)
+# print('Coder: Adding total time:', uc.keyCodes.addTime)
+# print('Store: GetNext Total time: ', uc.ds.getNextTime)
+# print('Store: storeByte Total time: ', uc.ds.storeByteTime)
+# print('Saver: add Total time: ', uc.saver.addTime)
+
+
+print('Finished', millis(), millis() - start)
+print('Used: ' + str(gc.mem_alloc()) + ' Free: ' + str(gc.mem_free()))
+
 msgStatus = statusOkay
 
 while(True):
@@ -99,11 +143,9 @@ while(True):
             sensor.set_auto_gain(False)
             sensor.set_auto_whitebal(False)
         elif message.command == 'R': # Toggle report mode.
-            reportMode = (message.dataBuffer[0] == '1')
+            reportMode = not reportMode;
         elif message.command == 'P': # Show image file on screen.
             print("Got a Piccy")
-            if showImage:
-                tim.deinit()
             showImage = True
             tim = Timer(4, freq=0.2)
             tim.callback(clearImage)

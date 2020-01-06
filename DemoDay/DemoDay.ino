@@ -141,6 +141,7 @@ static int  saveRight = 0;
 static int  saveLeft = 0;
 static int  saveRear = 0;
 int distanceMessage(int dir, int current, int saved) {
+  return current;
   if (abs(current - saved) > 100) {
     Serial1.print("[E"); // E is for Echo.
     Serial1.print(distCodes[dir]);
@@ -210,7 +211,13 @@ void loop() {
   if (Serial1.available()) {      // If anything comes in Serial (USB/pins 0,1/BLE),
     char next = Serial1.read();
     if (next == '{') {
-      boolean cameraSuccess = true;
+      boolean cameraSuccess = sendNext(next);
+      if (!cameraSuccess) {
+        // Wait until the camera settles down
+        while (Serial2.read() != next) {}
+        cameraSuccess = true;
+      }
+      next = Serial1.read();
       while (next != '}') {
         cameraSuccess &= sendNext(next);
         next = Serial1.read();
@@ -270,6 +277,7 @@ void loop() {
     memcpy(currentID, nextID, 7);
     for (int index = 0 ; index < imageCount ; index++) {
       if (!memcmp(nextID, images[index]->id, 7)) {
+        printUID(mfrc522.uid.uidByte);
         Serial1.print("Sending image");
         Serial1.println(index);
         sendFile(index);
@@ -291,8 +299,6 @@ void loop() {
 inline unsigned char *readCard() {
   if (!mfrc522.PICC_IsNewCardPresent()) return NULL;
   if (!mfrc522.PICC_ReadCardSerial()) return NULL;
-  printUID(mfrc522.uid.uidByte);
-
   if (mfrc522.uid.size != 7) return NULL;
   return mfrc522.uid.uidByte; 
 }
